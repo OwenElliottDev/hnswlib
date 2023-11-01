@@ -6,33 +6,9 @@
 
 namespace hnswlib {
 
-static float 
-CosineSimilarity(const void *pVect1, const void *pVect2, const void *qty_ptr) {
-    size_t qty = *((size_t *) qty_ptr);
-    float dotProduct = 0.0;
-    float normA = 0.0;
-    float normB = 0.0;
-    
-    const float *vect1 = (const float *) pVect1;
-    const float *vect2 = (const float *) pVect2;
-
-    for (size_t i = 0; i < qty; ++i) {
-        dotProduct += vect1[i] * vect2[i];
-        normA += vect1[i] * vect1[i];
-        normB += vect2[i] * vect2[i];
-    }
-
-    float denominator = sqrt(normA) * sqrt(normB);
-
-    if (denominator == 0.0f)
-        return 0.0f;
-
-    return dotProduct / denominator;
-}
-
 static float
 AngularDistance(const void *pVect1, const void *pVect2, const void *qty_ptr) {
-    return acos(CosineSimilarity(pVect1, pVect2, qty_ptr)) / PI;
+    return 2.0f * (acos(CosineSimilarity(pVect1, pVect2, qty_ptr)) / PI);
 }
 
 class AngularSpace : public SpaceInterface<float> {

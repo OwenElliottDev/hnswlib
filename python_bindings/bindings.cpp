@@ -158,21 +158,22 @@ class Index {
     int num_threads_default;
     hnswlib::labeltype cur_l;
     hnswlib::HierarchicalNSW<dist_t>* appr_alg;
-    hnswlib::SpaceInterface<float>* l2space;
+    hnswlib::SpaceInterface<float>* space;
 
 
     Index(const std::string &space_name, const int dim) : space_name(space_name), dim(dim) {
         normalize = false;
         if (space_name == "l2") {
-            l2space = new hnswlib::L2Space(dim);
+            space = new hnswlib::L2Space(dim);
         } else if (space_name == "ip") {
-            l2space = new hnswlib::InnerProductSpace(dim);
+            space = new hnswlib::InnerProductSpace(dim);
         } else if (space_name == "cosine") {
-            l2space = new hnswlib::InnerProductSpace(dim);
+            space = new hnswlib::InnerProductSpace(dim);
             normalize = true;
         } else if (space_name == "angular") {
-            l2space = new hnswlib::AngularSpace(dim);
-            normalize = true;
+            space = new hnswlib::AngularSpace(dim);
+        } else if (space_name == "theta") {
+            space = new hnswlib::ThetaSpace(dim);
         } else {
             throw std::runtime_error("Space name must be one of l2, ip, angular, or cosine.");
         }
@@ -186,7 +187,7 @@ class Index {
 
 
     ~Index() {
-        delete l2space;
+        delete space;
         if (appr_alg)
             delete appr_alg;
     }
@@ -202,7 +203,7 @@ class Index {
             throw std::runtime_error("The index is already initiated.");
         }
         cur_l = 0;
-        appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, maxElements, M, efConstruction, random_seed, allow_replace_deleted);
+        appr_alg = new hnswlib::HierarchicalNSW<dist_t>(space, maxElements, M, efConstruction, random_seed, allow_replace_deleted);
         index_inited = true;
         ep_added = false;
         appr_alg->ef_ = default_ef;
@@ -232,7 +233,7 @@ class Index {
           std::cerr << "Warning: Calling load_index for an already inited index. Old index is being deallocated." << std::endl;
           delete appr_alg;
       }
-      appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, path_to_index, false, max_elements, allow_replace_deleted);
+      appr_alg = new hnswlib::HierarchicalNSW<dist_t>(space, path_to_index, false, max_elements, allow_replace_deleted);
       cur_l = appr_alg->cur_element_count;
       index_inited = true;
     }
@@ -489,7 +490,7 @@ class Index {
 
         if (index_inited_) {
             new_index->appr_alg = new hnswlib::HierarchicalNSW<dist_t>(
-                new_index->l2space,
+                new_index->space,
                 d["max_elements"].cast<size_t>(),
                 d["M"].cast<size_t>(),
                 d["ef_construction"].cast<size_t>(),
@@ -739,10 +740,8 @@ class BFIndex {
             normalize = true;
         } else if (space_name == "angular") {
             space = new hnswlib::AngularSpace(dim);
-            normalize = true;
-        } else if (space_name == "angular") {
-            space = new hnswlib::AngularSpace(dim);
-            normalize = true;
+        } else if (space_name == "theta") {
+            space = new hnswlib::ThetaSpace(dim);
         } else {
             throw std::runtime_error("Space name must be one of l2, ip, angular, or cosine.");
         }
