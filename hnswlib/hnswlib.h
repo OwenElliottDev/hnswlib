@@ -155,6 +155,9 @@ class SpaceInterface {
     virtual ~SpaceInterface() {}
 };
 
+template<typename MTYPE>
+using FLTRDDISTFUNC = MTYPE(*)(const void *, const void *, const void *, const void *);
+
 template<typename dist_t>
 class AlgorithmInterface {
  public:
@@ -162,6 +165,9 @@ class AlgorithmInterface {
 
     virtual std::priority_queue<std::pair<dist_t, labeltype>>
         searchKnn(const void*, size_t, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
+
+    virtual std::priority_queue<std::pair<dist_t, labeltype>>
+        searchKnn(const void*, const void*, const float, size_t, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
 
     // Return k nearest neighbor in the order of closer fist
     virtual std::vector<std::pair<dist_t, labeltype>>

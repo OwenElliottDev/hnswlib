@@ -2,6 +2,7 @@
 
 #include "visited_list_pool.h"
 #include "hnswlib.h"
+#include "fltrd_query_dist.h"
 #include <atomic>
 #include <random>
 #include <stdlib.h>
@@ -1179,6 +1180,63 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return cur_c;
     }
 
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnn(const void *query_data, const void *filter_vec, const float threshold, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0) return result;
+
+        tableint currObj = enterpoint_node_;
+        // dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+        dist_t curdist = FltrdQueryDistance(query_data, getDataByInternalId(enterpoint_node_), filter_vec, dist_func_param_, threshold, fstdistfunc_);
+
+        for (int level = maxlevel_; level > 0; level--) {
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                unsigned int *data;
+
+                data = (unsigned int *) get_linklist(currObj, level);
+                int size = getListCount(data);
+                metric_hops++;
+                metric_distance_computations+=size;
+
+                tableint *datal = (tableint *) (data + 1);
+                for (int i = 0; i < size; i++) {
+                    tableint cand = datal[i];
+                    if (cand < 0 || cand > max_elements_)
+                        throw std::runtime_error("cand error");
+                    
+                    dist_t d = FltrdQueryDistance(query_data, getDataByInternalId(cand), filter_vec, dist_func_param_, threshold, fstdistfunc_);
+                    // dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+
+                    if (d < curdist) {
+                        curdist = d;
+                        currObj = cand;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        if (num_deleted_) {
+            top_candidates = searchBaseLayerST<true, true>(
+                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+        } else {
+            top_candidates = searchBaseLayerST<false, true>(
+                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+        }
+
+        while (top_candidates.size() > k) {
+            top_candidates.pop();
+        }
+        while (top_candidates.size() > 0) {
+            std::pair<dist_t, tableint> rez = top_candidates.top();
+            result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+            top_candidates.pop();
+        }
+        return result;
+    }
 
     std::priority_queue<std::pair<dist_t, labeltype >>
     searchKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {

@@ -96,6 +96,11 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
         cur_element_count--;
     }
 
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnn(const void *query_data, const void *filter_vec, const float threshold, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> res;
+        return res;
+    }
 
     std::priority_queue<std::pair<dist_t, labeltype >>
     searchKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
