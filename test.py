@@ -1,34 +1,71 @@
 import hnswlib
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
-dim = 16
-num_elements = 10000
+# Load a pre-trained sentence transformer model
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
-data = np.float32(np.random.random((num_elements, dim)))
+# Generate embeddings for sentences
+sentences = [
+    "Advancements in AI are transforming the tech industry.",
+    "Renewable energy sources are essential for sustainable development.",
+    "Quantum computing has the potential to revolutionize data processing.",
+    "The exploration of Mars could reveal new insights about our solar system.",
+    "Machine learning algorithms are becoming increasingly efficient.",
+    "Blockchain technology is changing the way digital transactions are secured.",
+    "The human genome project offers unprecedented insights into genetic makeup.",
+    "Autonomous vehicles could redefine the future of transportation.",
+    "Virtual reality is creating new opportunities in gaming and education.",
+    "3D printing is revolutionizing manufacturing and design processes.",
+    "Nanotechnology is leading to breakthroughs in medicine and materials science.",
+    "The study of neural networks contributes to our understanding of AI.",
+    "Robotic automation is being integrated into various industries.",
+    "Wireless technology is key to the growth of the Internet of Things.",
+    "Climate change research is vital for environmental preservation."
+]
+sentence_embeddings = model.encode(sentences)
 
-data1 = data[:num_elements // 2]
-data2 = data[num_elements // 2:]
+# Generate embeddings for positive query terms
+positive_queries = [
+    "artificial intelligence",
+    "sustainable energy",
+    "quantum technology",
+    "space exploration",
+    "machine learning",
+    # Add more positive queries as needed
+]
+positive_query_embeddings = model.encode(positive_queries)
 
-p = hnswlib.Index(space='l2', dim=dim)  # possible options are l2, cosine or ip
+# Generate embeddings for negative queries
+negative_queries = [
+    "classical music compositions",
+    "19th-century literature",
+    "medieval history",
+    "ocean biodiversity",
+    "culinary recipes",
+    # Add more queries as needed
+]
+negative_query_embeddings = model.encode(negative_queries)
 
-p.init_index(max_elements=num_elements//2, ef_construction=100, M=16)
+# Initialize and configure HNSWlib
+dim = sentence_embeddings.shape[1]
+num_elements = len(sentence_embeddings)
 
-# Controlling the recall by setting ef:
-# higher ef leads to better accuracy, but slower search
+p = hnswlib.Index(space='cosine', dim=dim)
+p.init_index(max_elements=num_elements, ef_construction=100, M=16)
 p.set_ef(10)
-
-# Set number of threads used during batch search/construction
-# By default using all available cores
 p.set_num_threads(4)
 
-print("Adding first batch of %d elements" % (len(data1)))
-p.add_items(data1)
+# Adding sentence embeddings to the index
+print("Adding sentence embeddings")
+p.add_items(sentence_embeddings)
 
-# Query the elements for themselves and measure recall:
-labels, distances = p.knn_query(data1, k=1)
-print("Recall for the first batch:", np.mean(labels.reshape(-1) == np.arange(len(data1))), "\n")
+# Query the elements using positive query terms
+print("Querying with positive query terms")
+labels, distances = p.knn_query(positive_query_embeddings, k=10)
+print("Distances for positive queries:", distances)
 
-labels, distances = p.knn_semantic_filter_query(data1, data2, 0.5, k=1)
-print("Recall for the first batch:", np.mean(labels.reshape(-1) == np.arange(len(data1))), "\n")
-
-
+# Perform semantic filter query
+print("Performing semantic filter query")
+labels, distances = p.knn_semantic_filter_query(positive_query_embeddings, negative_query_embeddings, 0.9, k=10)
+print("Distances for semantic filter query:", distances)
