@@ -1266,6 +1266,35 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return cur_c;
     }
 
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchExactKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0) return result;
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        
+        for (int i = 0; i < cur_element_count; i++) {
+            if (isIdAllowed && !isIdAllowed->operator()(getExternalLabel(i)))
+                continue;
+            dist_t d = fstdistfunc_(query_data, getDataByInternalId(i), dist_func_param_);
+
+            if (top_candidates.size() < k) {
+                top_candidates.emplace(d, i);
+            } else if (top_candidates.top().first > d) {
+                top_candidates.pop();
+                top_candidates.emplace(d, i);
+            }
+        }
+
+        while (top_candidates.size() > 0) {
+            std::pair<dist_t, tableint> rez = top_candidates.top();
+            result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+            top_candidates.pop();
+        }
+
+        return result;
+    }
+
 
     std::priority_queue<std::pair<dist_t, labeltype >>
     searchKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
