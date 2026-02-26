@@ -155,14 +155,20 @@ class Index {
     bool index_inited;
     bool ep_added;
     bool normalize;
+    bool is_f16_space;
+    bool is_bf16_space;
     int num_threads_default;
     hnswlib::labeltype cur_l;
     hnswlib::HierarchicalNSW<dist_t>* appr_alg;
     hnswlib::SpaceInterface<float>* l2space;
 
+    bool is_uint16_space() const { return is_f16_space || is_bf16_space; }
+
 
     Index(const std::string &space_name, const int dim) : space_name(space_name), dim(dim) {
         normalize = false;
+        is_f16_space = false;
+        is_bf16_space = false;
         if (space_name == "l2") {
             l2space = new hnswlib::L2Space(dim);
         } else if (space_name == "ip") {
@@ -170,8 +176,28 @@ class Index {
         } else if (space_name == "cosine") {
             l2space = new hnswlib::InnerProductSpace(dim);
             normalize = true;
+        } else if (space_name == "l2_f16") {
+            l2space = new hnswlib::L2Float16Space(dim);
+            is_f16_space = true;
+        } else if (space_name == "ip_f16") {
+            l2space = new hnswlib::InnerProductFloat16Space(dim);
+            is_f16_space = true;
+        } else if (space_name == "cosine_f16") {
+            l2space = new hnswlib::InnerProductFloat16Space(dim);
+            is_f16_space = true;
+            normalize = true;
+        } else if (space_name == "l2_bf16") {
+            l2space = new hnswlib::L2BFloat16Space(dim);
+            is_bf16_space = true;
+        } else if (space_name == "ip_bf16") {
+            l2space = new hnswlib::InnerProductBFloat16Space(dim);
+            is_bf16_space = true;
+        } else if (space_name == "cosine_bf16") {
+            l2space = new hnswlib::InnerProductBFloat16Space(dim);
+            is_bf16_space = true;
+            normalize = true;
         } else {
-            throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
+            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, or cosine_bf16.");
         }
         appr_alg = NULL;
         ep_added = true;
@@ -247,6 +273,26 @@ class Index {
             norm_array[i] = data[i] * norm;
     }
 
+    void float_to_u16_vector(const float* src, uint16_t* dst, size_t count) {
+        if (is_bf16_space) {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::float_to_bfloat16(src[i]);
+        } else {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::float_to_half(src[i]);
+        }
+    }
+
+    void u16_to_float_vector(const uint16_t* src, float* dst, size_t count) {
+        if (is_bf16_space) {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::bfloat16_to_float(src[i]);
+        } else {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::half_to_float(src[i]);
+        }
+    }
+
 
     void addItems(py::object input, py::object ids_ = py::none(), int num_threads = -1, bool replace_deleted = false) {
         py::array_t < dist_t, py::array::c_style | py::array::forcecast > items(input);
@@ -277,13 +323,34 @@ class Index {
                     normalize_vector(vector_data, norm_array.data());
                     vector_data = norm_array.data();
                 }
-                appr_alg->addPoint((void*)vector_data, (size_t)id, replace_deleted);
+                if (is_uint16_space()) {
+                    std::vector<uint16_t> f16_buf(dim);
+                    float_to_u16_vector(vector_data, f16_buf.data(), dim);
+                    appr_alg->addPoint((void*)f16_buf.data(), (size_t)id, replace_deleted);
+                } else {
+                    appr_alg->addPoint((void*)vector_data, (size_t)id, replace_deleted);
+                }
                 start = 1;
                 ep_added = true;
             }
 
             py::gil_scoped_release l;
-            if (normalize == false) {
+            if (is_uint16_space()) {
+                std::vector<float> norm_array(normalize ? num_threads * dim : 0);
+                std::vector<uint16_t> f16_array(num_threads * dim);
+                ParallelFor(start, rows, num_threads, [&](size_t row, size_t threadId) {
+                    size_t start_idx = threadId * dim;
+                    float* src = (float*)items.data(row);
+                    if (normalize) {
+                        normalize_vector(src, norm_array.data() + start_idx);
+                        src = norm_array.data() + start_idx;
+                    }
+                    float_to_u16_vector(src, f16_array.data() + start_idx, dim);
+
+                    size_t id = ids.size() ? ids.at(row) : (cur_l + row);
+                    appr_alg->addPoint((void*)(f16_array.data() + start_idx), (size_t)id, replace_deleted);
+                });
+            } else if (normalize == false) {
                 ParallelFor(start, rows, num_threads, [&](size_t row, size_t threadId) {
                     size_t id = ids.size() ? ids.at(row) : (cur_l + row);
                     appr_alg->addPoint((void*)items.data(row), (size_t)id, replace_deleted);
@@ -325,15 +392,32 @@ class Index {
             }
         }
 
-        std::vector<std::vector<data_t>> data;
-        for (auto id : ids) {
-            data.push_back(appr_alg->template getDataByLabel<data_t>(id));
-        }
-        if (return_type == "list") {
-            return py::cast(data);
-        }
-        if (return_type == "numpy") {
-            return py::array_t< data_t, py::array::c_style | py::array::forcecast >(py::cast(data));
+        if (is_uint16_space()) {
+            std::vector<std::vector<float>> data;
+            for (auto id : ids) {
+                // Get raw uint16_t data and convert to float32
+                std::vector<uint16_t> raw = appr_alg->template getDataByLabel<uint16_t>(id);
+                std::vector<float> converted(raw.size());
+                u16_to_float_vector(raw.data(), converted.data(), raw.size());
+                data.push_back(std::move(converted));
+            }
+            if (return_type == "list") {
+                return py::cast(data);
+            }
+            if (return_type == "numpy") {
+                return py::array_t<float, py::array::c_style | py::array::forcecast>(py::cast(data));
+            }
+        } else {
+            std::vector<std::vector<data_t>> data;
+            for (auto id : ids) {
+                data.push_back(appr_alg->template getDataByLabel<data_t>(id));
+            }
+            if (return_type == "list") {
+                return py::cast(data);
+            }
+            if (return_type == "numpy") {
+                return py::array_t< data_t, py::array::c_style | py::array::forcecast >(py::cast(data));
+            }
         }
     }
 
@@ -639,7 +723,31 @@ class Index {
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
-            if (normalize == false) {
+            if (is_uint16_space()) {
+                std::vector<float> norm_array(normalize ? num_threads * features : 0);
+                std::vector<uint16_t> f16_array(num_threads * dim);
+                ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
+                    size_t start_idx = threadId * dim;
+                    float* src = (float*)items.data(row);
+                    if (normalize) {
+                        normalize_vector(src, norm_array.data() + start_idx);
+                        src = norm_array.data() + start_idx;
+                    }
+                    float_to_u16_vector(src, f16_array.data() + start_idx, dim);
+
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = appr_alg->searchKnn(
+                        (void*)(f16_array.data() + start_idx), k, p_idFilter);
+                    if (result.size() != k)
+                        throw std::runtime_error(
+                            "Cannot return the results in a contiguous 2D array. Probably ef or M is too small");
+                    for (int i = k - 1; i >= 0; i--) {
+                        auto& result_tuple = result.top();
+                        data_numpy_d[row * k + i] = result_tuple.first;
+                        data_numpy_l[row * k + i] = result_tuple.second;
+                        result.pop();
+                    }
+                });
+            } else if (normalize == false) {
                 ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
                     std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = appr_alg->searchKnn(
                         (void*)items.data(row), k, p_idFilter);
@@ -731,15 +839,21 @@ class BFIndex {
     int dim;
     bool index_inited;
     bool normalize;
+    bool is_f16_space;
+    bool is_bf16_space;
     int num_threads_default;
 
     hnswlib::labeltype cur_l;
     hnswlib::BruteforceSearch<dist_t>* alg;
     hnswlib::SpaceInterface<float>* space;
 
+    bool is_uint16_space() const { return is_f16_space || is_bf16_space; }
+
 
     BFIndex(const std::string &space_name, const int dim) : space_name(space_name), dim(dim) {
         normalize = false;
+        is_f16_space = false;
+        is_bf16_space = false;
         if (space_name == "l2") {
             space = new hnswlib::L2Space(dim);
         } else if (space_name == "ip") {
@@ -747,8 +861,28 @@ class BFIndex {
         } else if (space_name == "cosine") {
             space = new hnswlib::InnerProductSpace(dim);
             normalize = true;
+        } else if (space_name == "l2_f16") {
+            space = new hnswlib::L2Float16Space(dim);
+            is_f16_space = true;
+        } else if (space_name == "ip_f16") {
+            space = new hnswlib::InnerProductFloat16Space(dim);
+            is_f16_space = true;
+        } else if (space_name == "cosine_f16") {
+            space = new hnswlib::InnerProductFloat16Space(dim);
+            is_f16_space = true;
+            normalize = true;
+        } else if (space_name == "l2_bf16") {
+            space = new hnswlib::L2BFloat16Space(dim);
+            is_bf16_space = true;
+        } else if (space_name == "ip_bf16") {
+            space = new hnswlib::InnerProductBFloat16Space(dim);
+            is_bf16_space = true;
+        } else if (space_name == "cosine_bf16") {
+            space = new hnswlib::InnerProductBFloat16Space(dim);
+            is_bf16_space = true;
+            normalize = true;
         } else {
-            throw std::runtime_error("Space name must be one of l2, ip, or cosine.");
+            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, or cosine_bf16.");
         }
         alg = NULL;
         index_inited = false;
@@ -798,6 +932,26 @@ class BFIndex {
             norm_array[i] = data[i] * norm;
     }
 
+    void float_to_u16_vector(const float* src, uint16_t* dst, size_t count) {
+        if (is_bf16_space) {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::float_to_bfloat16(src[i]);
+        } else {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::float_to_half(src[i]);
+        }
+    }
+
+    void u16_to_float_vector(const uint16_t* src, float* dst, size_t count) {
+        if (is_bf16_space) {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::bfloat16_to_float(src[i]);
+        } else {
+            for (size_t i = 0; i < count; i++)
+                dst[i] = hnswlib::half_to_float(src[i]);
+        }
+    }
+
 
     void addItems(py::object input, py::object ids_ = py::none()) {
         py::array_t < dist_t, py::array::c_style | py::array::forcecast > items(input);
@@ -813,7 +967,17 @@ class BFIndex {
         {
             for (size_t row = 0; row < rows; row++) {
                 size_t id = ids.size() ? ids.at(row) : cur_l + row;
-                if (!normalize) {
+                if (is_uint16_space()) {
+                    float* src = (float *)items.data(row);
+                    std::vector<float> normalized_vector(dim);
+                    if (normalize) {
+                        normalize_vector(src, normalized_vector.data());
+                        src = normalized_vector.data();
+                    }
+                    std::vector<uint16_t> f16_buf(dim);
+                    float_to_u16_vector(src, f16_buf.data(), dim);
+                    alg->addPoint((void *)f16_buf.data(), (size_t)id);
+                } else if (!normalize) {
                     alg->addPoint((void *) items.data(row), (size_t) id);
                 } else {
                     std::vector<float> normalized_vector(dim);
@@ -871,16 +1035,38 @@ class BFIndex {
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
-            ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
-                std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
-                    (void*)items.data(row), k, p_idFilter);
-                for (int i = k - 1; i >= 0; i--) {
-                    auto& result_tuple = result.top();
-                    data_numpy_d[row * k + i] = result_tuple.first;
-                    data_numpy_l[row * k + i] = result_tuple.second;
-                    result.pop();
-                }
-            });
+            if (is_uint16_space()) {
+                ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
+                    float* src = (float*)items.data(row);
+                    std::vector<float> norm_buf(normalize ? dim : 0);
+                    if (normalize) {
+                        normalize_vector(src, norm_buf.data());
+                        src = norm_buf.data();
+                    }
+                    std::vector<uint16_t> f16_buf(dim);
+                    float_to_u16_vector(src, f16_buf.data(), dim);
+
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
+                        (void*)f16_buf.data(), k, p_idFilter);
+                    for (int i = k - 1; i >= 0; i--) {
+                        auto& result_tuple = result.top();
+                        data_numpy_d[row * k + i] = result_tuple.first;
+                        data_numpy_l[row * k + i] = result_tuple.second;
+                        result.pop();
+                    }
+                });
+            } else {
+                ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
+                        (void*)items.data(row), k, p_idFilter);
+                    for (int i = k - 1; i >= 0; i--) {
+                        auto& result_tuple = result.top();
+                        data_numpy_d[row * k + i] = result_tuple.first;
+                        data_numpy_l[row * k + i] = result_tuple.second;
+                        result.pop();
+                    }
+                });
+            }
         }
 
         py::capsule free_when_done_l(data_numpy_l, [](void *f) {

@@ -17,6 +17,12 @@
 #define USE_AVX512
 #endif
 #endif
+#ifdef __F16C__
+#define USE_F16C
+#endif
+#endif
+#if defined(__aarch64__)
+#define USE_NEON
 #endif
 #endif
 
@@ -114,6 +120,10 @@ static bool AVX512Capable() {
     }
     return HW_AVX512F && avx512Supported;
 }
+#endif
+
+#if defined(USE_NEON)
+#include <arm_neon.h>
 #endif
 
 #include <queue>
@@ -223,6 +233,8 @@ AlgorithmInterface<dist_t>::searchKnnCloserFirst(const void* query_data, size_t 
 
 #include "space_l2.h"
 #include "space_ip.h"
+#include "space_f16.h"
+#include "space_bf16.h"
 #include "stop_condition.h"
 #include "bruteforce.h"
 #include "hnswalg.h"
