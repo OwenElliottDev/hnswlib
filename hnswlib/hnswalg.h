@@ -2,6 +2,7 @@
 
 #include "visited_list_pool.h"
 #include "hnswlib.h"
+#include <algorithm>
 #include <atomic>
 #include <random>
 #include <stdlib.h>
@@ -928,6 +929,163 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     /*
+    * Removes an element from the index and repairs the graph around it
+    * (delete-and-reconnect, as done by Vespa, instead of only tombstoning):
+    * the element is unlinked from its neighbors at every level and the
+    * orphaned neighbors are reconnected to each other, closest pairs first,
+    * while they have spare link capacity. The slot is marked deleted so any
+    * remaining incoming links are filtered from results, the label is
+    * released immediately, and the slot is reused by addPoint with
+    * replace_deleted=true when replacement is enabled.
+    *
+    * Note: incoming links from non-neighbors can remain (the graph is not
+    * perfectly symmetric); they are harmless and are rewired when the slot
+    * is reused. Not thread-safe with concurrent insert/update operations.
+    */
+    void removePoint(labeltype label) {
+        // lock all operations with element by label
+        std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+
+        std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+        auto search = label_lookup_.find(label);
+        if (search == label_lookup_.end()) {
+            throw std::runtime_error("Label not found");
+        }
+        tableint internalId = search->second;
+        label_lookup_.erase(search);
+        lock_table.unlock();
+
+        markDeletedInternal(internalId);
+        repairGraphAfterRemoval(internalId);
+    }
+
+
+    void repairGraphAfterRemoval(tableint internalId) {
+        // if the entry point is being removed, move it to the live element of
+        // the highest level first (searches must not start at an unlinked node)
+        if (internalId == enterpoint_node_) {
+            std::unique_lock <std::mutex> lock_global(global);
+            tableint new_ep = enterpoint_node_;
+            int best_level = -1;
+            for (tableint i = 0; i < (tableint) cur_element_count; i++) {
+                if (i == internalId || isMarkedDeleted(i))
+                    continue;
+                if (element_levels_[i] > best_level) {
+                    best_level = element_levels_[i];
+                    new_ep = i;
+                }
+            }
+            if (best_level < 0) {
+                // no live element remains: keep the entry point and its links
+                // so the graph stays traversable until the slots are reused
+                return;
+            }
+            enterpoint_node_ = new_ep;
+            maxlevel_ = best_level;
+        }
+
+        for (int level = 0; level <= element_levels_[internalId]; level++) {
+            size_t maxM = level ? maxM_ : maxM0_;
+
+            // detach the removed element from its neighbors at this level
+            std::vector<tableint> neighbors;
+            {
+                std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
+                linklistsizeint *ll = get_linklist_at_level(internalId, level);
+                unsigned short size = getListCount(ll);
+                tableint *data = (tableint *)(ll + 1);
+                neighbors.assign(data, data + size);
+            }
+
+            for (tableint neigh : neighbors) {
+                std::unique_lock <std::mutex> lock(link_list_locks_[neigh]);
+                linklistsizeint *ll = get_linklist_at_level(neigh, level);
+                unsigned short size = getListCount(ll);
+                tableint *data = (tableint *)(ll + 1);
+                unsigned short kept = 0;
+                for (unsigned short i = 0; i < size; i++) {
+                    if (data[i] != internalId)
+                        data[kept++] = data[i];
+                }
+                setListCount(ll, kept);
+            }
+
+            std::vector<tableint> live;
+            for (tableint neigh : neighbors) {
+                if (neigh == internalId || isMarkedDeleted(neigh))
+                    continue;
+                if (std::find(live.begin(), live.end(), neigh) == live.end())
+                    live.push_back(neigh);
+            }
+
+            // the graph is not perfectly symmetric, so stray links into the
+            // removed element can survive; keep it traversable as a
+            // pass-through bridge by pointing its links at its live
+            // ex-neighbors (it is excluded from results by the deleted mark).
+            // When no live ex-neighbor exists, keep the original links so a
+            // straggler can still escape through other bridges.
+            if (!live.empty()) {
+                std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
+                linklistsizeint *ll = get_linklist_at_level(internalId, level);
+                tableint *data = (tableint *)(ll + 1);
+                setListCount(ll, live.size());
+                for (size_t i = 0; i < live.size(); i++)
+                    data[i] = live[i];
+            }
+
+            // reconnect the orphaned neighborhood: each live ex-neighbor
+            // merges the other live ex-neighbors into its link list; when the
+            // merged set exceeds capacity, the standard neighbor selection
+            // heuristic re-selects the best maxM links (the same policy used
+            // when an insert overflows a neighbor list)
+            if (live.size() < 2)
+                continue;
+
+            for (tableint n : live) {
+                std::vector<tableint> merged;
+                {
+                    std::unique_lock <std::mutex> lock(link_list_locks_[n]);
+                    linklistsizeint *ll = get_linklist_at_level(n, level);
+                    unsigned short size = getListCount(ll);
+                    tableint *data = (tableint *)(ll + 1);
+                    merged.assign(data, data + size);
+                }
+                size_t num_existing = merged.size();
+                for (tableint other : live) {
+                    if (other != n && std::find(merged.begin(), merged.end(), other) == merged.end())
+                        merged.push_back(other);
+                }
+                if (merged.size() == num_existing)
+                    continue;
+
+                if (merged.size() > maxM) {
+                    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
+                    for (tableint c : merged) {
+                        candidates.emplace(
+                            fstdistfunc_(getDataByInternalId(n), getDataByInternalId(c), dist_func_param_), c);
+                    }
+                    getNeighborsByHeuristic2(candidates, maxM);
+                    merged.clear();
+                    while (!candidates.empty()) {
+                        merged.push_back(candidates.top().second);
+                        candidates.pop();
+                    }
+                }
+
+                {
+                    std::unique_lock <std::mutex> lock(link_list_locks_[n]);
+                    linklistsizeint *ll = get_linklist_at_level(n, level);
+                    tableint *data = (tableint *)(ll + 1);
+                    setListCount(ll, merged.size());
+                    for (size_t i = 0; i < merged.size(); i++)
+                        data[i] = merged[i];
+                }
+            }
+        }
+    }
+
+
+    /*
     * Checks the first 16 bits of the memory to see if the element is marked deleted.
     */
     bool isMarkedDeleted(tableint internalId) const {
@@ -986,6 +1144,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             lock_table.unlock();
 
             unmarkDeletedInternal(internal_id_replaced);
+            // a removed slot can have a higher level than the current entry
+            // point (e.g. after the entry point itself was removed); promote
+            // it before updatePoint, which requires level <= maxlevel_
+            if (element_levels_[internal_id_replaced] > maxlevel_) {
+                std::unique_lock <std::mutex> lock_global(global);
+                enterpoint_node_ = internal_id_replaced;
+                maxlevel_ = element_levels_[internal_id_replaced];
+            }
             updatePoint(data_point, internal_id_replaced, 1.0);
         }
     }

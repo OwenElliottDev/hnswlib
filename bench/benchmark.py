@@ -138,16 +138,16 @@ def bench_churn(args):
     queries = pool[-args.num_queries:]
     pool = pool[:-args.num_queries]
 
-    # capacity: with tombstone deletes and no replacement the index must grow
-    if args.delete_mode == "mark" and not args.replace_deleted:
-        capacity = args.num_elements + args.rounds * churn
-    else:
+    # without slot replacement the index must grow to hold dead slots
+    if args.replace_deleted:
         capacity = args.num_elements
+    else:
+        capacity = args.num_elements + args.rounds * churn
 
     index = hnswlib.Index(space=args.space, dim=args.dim)
     index.init_index(max_elements=capacity, M=args.M,
                      ef_construction=args.ef_construction,
-                     allow_replace_deleted=(args.delete_mode == "mark" and args.replace_deleted))
+                     allow_replace_deleted=args.replace_deleted)
     index.set_ef(args.ef[0])
 
     bf = hnswlib.BFIndex(space=args.space, dim=args.dim)
@@ -192,7 +192,7 @@ def bench_churn(args):
         new_data = pool[next_label:next_label + churn]
         t0 = time.perf_counter()
         index.add_items(new_data, new_labels, num_threads=args.build_threads,
-                        replace_deleted=(args.delete_mode == "mark" and args.replace_deleted))
+                        replace_deleted=args.replace_deleted)
         insert_s = time.perf_counter() - t0
         bf.add_items(new_data, new_labels)
         next_label += churn
@@ -244,7 +244,7 @@ def main():
     churn_p.add_argument("--churn-fraction", type=float, default=0.05,
                          help="fraction of the index deleted+reinserted per round (default 0.05)")
     churn_p.add_argument("--delete-mode", default="mark", choices=["mark", "remove"],
-                         help="mark: mark_deleted tombstones; remove: true removal (requires remove_item support)")
+                         help="mark: mark_deleted tombstones; remove: delete-and-reconnect via remove_item")
     churn_p.add_argument("--replace-deleted", action="store_true",
                          help="with --delete-mode mark, reuse tombstoned slots for new inserts")
 
