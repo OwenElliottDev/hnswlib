@@ -988,14 +988,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             size_t maxM = level ? maxM_ : maxM0_;
 
             // detach the removed element from its neighbors at this level
-            std::vector<tableint> neighbors;
-            {
-                std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
-                linklistsizeint *ll = get_linklist_at_level(internalId, level);
-                unsigned short size = getListCount(ll);
-                tableint *data = (tableint *)(ll + 1);
-                neighbors.assign(data, data + size);
-            }
+            std::vector<tableint> neighbors = getConnectionsWithLock(internalId, level);
 
             for (tableint neigh : neighbors) {
                 std::unique_lock <std::mutex> lock(link_list_locks_[neigh]);
@@ -1012,9 +1005,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             std::vector<tableint> live;
             for (tableint neigh : neighbors) {
-                if (neigh == internalId || isMarkedDeleted(neigh))
-                    continue;
-                if (std::find(live.begin(), live.end(), neigh) == live.end())
+                if (!isMarkedDeleted(neigh))
                     live.push_back(neigh);
             }
 
@@ -1042,14 +1033,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 continue;
 
             for (tableint n : live) {
-                std::vector<tableint> merged;
-                {
-                    std::unique_lock <std::mutex> lock(link_list_locks_[n]);
-                    linklistsizeint *ll = get_linklist_at_level(n, level);
-                    unsigned short size = getListCount(ll);
-                    tableint *data = (tableint *)(ll + 1);
-                    merged.assign(data, data + size);
-                }
+                std::vector<tableint> merged = getConnectionsWithLock(n, level);
                 size_t num_existing = merged.size();
                 for (tableint other : live) {
                     if (other != n && std::find(merged.begin(), merged.end(), other) == merged.end())
@@ -1144,14 +1128,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             lock_table.unlock();
 
             unmarkDeletedInternal(internal_id_replaced);
-            // a removed slot can have a higher level than the current entry
-            // point (e.g. after the entry point itself was removed); promote
-            // it before updatePoint, which requires level <= maxlevel_
-            if (element_levels_[internal_id_replaced] > maxlevel_) {
-                std::unique_lock <std::mutex> lock_global(global);
-                enterpoint_node_ = internal_id_replaced;
-                maxlevel_ = element_levels_[internal_id_replaced];
-            }
             updatePoint(data_point, internal_id_replaced, 1.0);
         }
     }
@@ -1160,6 +1136,17 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability) {
         // update the feature vector associated with existing point with new vector
         memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
+
+        // a recycled slot can have a higher level than the current entry
+        // point (e.g. after the entry point itself was removed by
+        // removePoint); promote it so the descent invariants hold
+        if (element_levels_[internalId] > maxlevel_) {
+            std::unique_lock <std::mutex> lock_global(global);
+            if (element_levels_[internalId] > maxlevel_) {
+                enterpoint_node_ = internalId;
+                maxlevel_ = element_levels_[internalId];
+            }
+        }
 
         int maxLevelCopy = maxlevel_;
         tableint entryPointCopy = enterpoint_node_;
