@@ -95,7 +95,7 @@ def output(args, results):
 
 def bench_static(args):
     rng = np.random.default_rng(args.seed)
-    mrl_scan_dim = getattr(args, "mrl_scan_dim", 0)
+    mrl_scan_dim = args.mrl_scan_dim
     print(f"# static: space={args.space} dim={args.dim} n={args.num_elements} "
           f"k={args.k} M={args.M} ef_construction={args.ef_construction} dataset={args.dataset}"
           + (f" mrl_scan_dim={mrl_scan_dim}" if mrl_scan_dim else ""))
@@ -129,7 +129,7 @@ def bench_static(args):
                "build_seconds": build_s,
                "index_file_size_bytes": index.index_file_size(), "peak_rss_mb": rss_after,
                "sweep": []}
-    rerank_sizes = getattr(args, "rerank_size", None) or [0]
+    rerank_sizes = args.rerank_size
     for ef in args.ef:
         index.set_ef(ef)
         for rerank in rerank_sizes:
