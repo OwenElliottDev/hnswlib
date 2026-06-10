@@ -48,7 +48,7 @@ def check_ann_results(self, metric, items, query_items, k, ann_l, ann_d, err_thr
     self.assertLessEqual(wrong_dists, dists_thresh, msg=f"Error: {wrong_dists} ann distance values are different from brute-force values")
 
 
-def test_space_main(self, space, dim):
+def check_space_main(self, space, dim):
 
     # Generating sample data
     data = np.float32(np.random.random((self.num_elements, dim)))
@@ -142,10 +142,10 @@ class PickleUnitTests(unittest.TestCase):
                                  # i.e., number of values that are (d1-d2)**2>1e-3
 
     def test_inner_product_space(self):
-        test_space_main(self, 'ip', 16)
+        check_space_main(self, 'ip', 16)
 
     def test_l2_space(self):
-        test_space_main(self, 'l2', 53)
+        check_space_main(self, 'l2', 53)
 
     def test_cosine_space(self):
-        test_space_main(self, 'cosine', 32)
+        check_space_main(self, 'cosine', 32)
