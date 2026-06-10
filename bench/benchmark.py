@@ -139,7 +139,7 @@ def bench_churn(args):
     pool = pool[:-args.num_queries]
 
     # without slot replacement the index must grow to hold dead slots
-    if args.replace_deleted:
+    if args.replace_deleted or not args.refill:
         capacity = args.num_elements
     else:
         capacity = args.num_elements + args.rounds * churn
@@ -187,15 +187,17 @@ def bench_churn(args):
             bf.delete_vector(label)
         oldest += churn
 
-        # insert `churn` new elements
-        new_labels = np.arange(next_label, next_label + churn)
-        new_data = pool[next_label:next_label + churn]
-        t0 = time.perf_counter()
-        index.add_items(new_data, new_labels, num_threads=args.build_threads,
-                        replace_deleted=args.replace_deleted)
-        insert_s = time.perf_counter() - t0
-        bf.add_items(new_data, new_labels)
-        next_label += churn
+        # insert `churn` new elements (unless measuring pure deletion decay)
+        insert_s = float("inf")
+        if args.refill:
+            new_labels = np.arange(next_label, next_label + churn)
+            new_data = pool[next_label:next_label + churn]
+            t0 = time.perf_counter()
+            index.add_items(new_data, new_labels, num_threads=args.build_threads,
+                            replace_deleted=args.replace_deleted)
+            insert_s = time.perf_counter() - t0
+            bf.add_items(new_data, new_labels)
+            next_label += churn
 
         # query and score against exact ground truth over the live set
         true_labels, _ = bf.knn_query(queries, k=args.k)
@@ -246,7 +248,10 @@ def main():
     churn_p.add_argument("--delete-mode", default="mark", choices=["mark", "remove"],
                          help="mark: mark_deleted tombstones; remove: delete-and-reconnect via remove_item")
     churn_p.add_argument("--replace-deleted", action="store_true",
-                         help="with --delete-mode mark, reuse tombstoned slots for new inserts")
+                         help="reuse deleted slots for new inserts")
+    churn_p.add_argument("--refill", action=argparse.BooleanOptionalAction, default=True,
+                         help="--no-refill skips the insert phase: the index shrinks each round, "
+                              "showing recall/QPS decay as deletions accumulate")
 
     args = parser.parse_args()
     if args.mode == "static":
