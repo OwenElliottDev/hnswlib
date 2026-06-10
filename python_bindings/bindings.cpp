@@ -162,8 +162,6 @@ class Index {
     hnswlib::labeltype cur_l;
     hnswlib::HierarchicalNSW<dist_t>* appr_alg;
     hnswlib::SpaceInterface<float>* l2space;
-    hnswlib::DISTFUNC<float> mrl_full_dist_func;
-    void* mrl_full_dist_func_param;
 
     bool is_uint16_space() const { return is_f16_space || is_bf16_space; }
     bool is_mrl_index() const { return mrl_scan_dim > 0; }
@@ -174,25 +172,18 @@ class Index {
         normalize = false;
         is_f16_space = false;
         is_bf16_space = false;
-        mrl_full_dist_func = nullptr;
-        mrl_full_dist_func_param = nullptr;
         if (mrl_scan_dim != 0 && (mrl_scan_dim < 0 || mrl_scan_dim >= dim))
             throw std::runtime_error("mrl_scan_dim must be greater than 0 and less than dim.");
         if (is_mrl_index()) {
-            hnswlib::MrlSpace* mrl_space;
-            if (space_name == "l2") {
-                mrl_space = new hnswlib::MrlSpace(new hnswlib::L2Space(mrl_scan_dim), new hnswlib::L2Space(dim));
-            } else if (space_name == "ip") {
-                mrl_space = new hnswlib::MrlSpace(new hnswlib::InnerProductSpace(mrl_scan_dim), new hnswlib::InnerProductSpace(dim));
-            } else if (space_name == "cosine") {
-                mrl_space = new hnswlib::MrlSpace(new hnswlib::InnerProductSpace(mrl_scan_dim), new hnswlib::InnerProductSpace(dim));
-                normalize = true;
-            } else {
+            auto make_inner = [&](int d) -> hnswlib::SpaceInterface<float>* {
+                if (space_name == "l2")
+                    return new hnswlib::L2Space(d);
+                if (space_name == "ip" || space_name == "cosine")
+                    return new hnswlib::InnerProductSpace(d);
                 throw std::runtime_error("MRL (mrl_scan_dim) is only supported for l2, ip, and cosine spaces.");
-            }
-            mrl_full_dist_func = mrl_space->get_full_dist_func();
-            mrl_full_dist_func_param = mrl_space->get_full_dist_func_param();
-            l2space = mrl_space;
+            };
+            normalize = (space_name == "cosine");
+            l2space = new hnswlib::MrlSpace(make_inner(mrl_scan_dim), make_inner(dim));
         } else if (space_name == "l2") {
             l2space = new hnswlib::L2Space(dim);
         } else if (space_name == "ip") {
@@ -755,10 +746,12 @@ class Index {
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
 
+            hnswlib::MrlSpace* mrl_space = rerank_size > 0 ? static_cast<hnswlib::MrlSpace*>(l2space) : nullptr;
             auto search_one = [&](const void* query) {
-                if (rerank_size > 0)
+                if (mrl_space)
                     return appr_alg->searchKnnMrl(
-                        query, k, rerank_size, mrl_full_dist_func, mrl_full_dist_func_param, p_idFilter);
+                        query, k, rerank_size, mrl_space->get_full_dist_func(),
+                        mrl_space->get_full_dist_func_param(), p_idFilter);
                 return appr_alg->searchKnn(query, k, p_idFilter);
             };
 
