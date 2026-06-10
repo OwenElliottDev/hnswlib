@@ -3,6 +3,14 @@ Header-only C++ HNSW implementation with python bindings, insertions and updates
 
 **NEWS:**
 
+**version 0.9.0**
+
+* Fixed incorrect results in bruteforce search with filter (#514) by [@lukaszsmolinski](https://github.com/lukaszsmolinski)
+* Fixed missing normalization check in BFIndex (#514) by [@lukaszsmolinski](https://github.com/lukaszsmolinski)
+* Throw an exception when fewer than k elements are available (#514) by [@lukaszsmolinski](https://github.com/lukaszsmolinski)
+* Remove unused variable (#531) by [@lulyon](https://github.com/lulyon)
+* Change cosine similarity to distance in README by [@yurymalkov](https://github.com/yurymalkov)
+
 **version 0.8.0** 
 
 * Multi-vector document search and epsilon search (for now, only in C++)
@@ -41,7 +49,7 @@ Description of the algorithm parameters can be found in [ALGO_PARAMS.md](ALGO_PA
 | -------------    |:---------------:| -----------------------:|
 |Squared L2        |'l2'             | d = sum((Ai-Bi)^2)      |
 |Inner product     |'ip'             | d = 1.0 - sum(Ai\*Bi)   |
-|Cosine similarity |'cosine'         | d = 1.0 - sum(Ai\*Bi) / sqrt(sum(Ai\*Ai) * sum(Bi\*Bi))|
+|Cosine distance   |'cosine'         | d = 1.0 - sum(Ai\*Bi) / sqrt(sum(Ai\*Ai) * sum(Bi\*Bi))|
 
 Note that inner product is not an actual metric. An element can be closer to some other element than to itself. That allows some speedup if you remove all elements that are not the closest to themselves from the index.
 
