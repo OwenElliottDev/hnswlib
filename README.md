@@ -50,6 +50,7 @@ Description of the algorithm parameters can be found in [ALGO_PARAMS.md](ALGO_PA
 |Squared L2        |'l2'             | d = sum((Ai-Bi)^2)      |
 |Inner product     |'ip'             | d = 1.0 - sum(Ai\*Bi)   |
 |Cosine distance   |'cosine'         | d = 1.0 - sum(Ai\*Bi) / sqrt(sum(Ai\*Ai) * sum(Bi\*Bi))|
+|Geographic distance|'geodegrees'    | great-circle (haversine) distance in kilometers between (latitude, longitude) points given in degrees; requires dim=2 and float32 |
 
 Note that inner product is not an actual metric. An element can be closer to some other element than to itself. That allows some speedup if you remove all elements that are not the closest to themselves from the index.
 
