@@ -14,6 +14,11 @@ def build_index(data, labels, max_elements=None, allow_replace_deleted=False, ef
     return index
 
 
+def recall_at_k(found_labels, true_labels):
+    hits = sum(len(set(f) & set(t)) for f, t in zip(found_labels, true_labels))
+    return hits / float(true_labels.shape[0] * true_labels.shape[1])
+
+
 class RemoveItemTestCase(unittest.TestCase):
     def test_removed_items_are_gone(self):
         rng = np.random.default_rng(1)
@@ -55,7 +60,7 @@ class RemoveItemTestCase(unittest.TestCase):
         queries = rng.standard_normal((200, dim)).astype(np.float32)
         true_labels, _ = bf.knn_query(queries, k=k)
         found, _ = index.knn_query(queries, k=k)
-        recall = sum(len(set(f) & set(t)) for f, t in zip(found, true_labels)) / (len(queries) * k)
+        recall = recall_at_k(found, true_labels)
         self.assertGreater(recall, 0.95, f"recall after heavy removal: {recall}")
 
         # self-recall of live elements
@@ -120,7 +125,7 @@ class RemoveItemTestCase(unittest.TestCase):
 
         true_labels, _ = bf.knn_query(queries, k=k)
         found, _ = index.knn_query(queries, k=k)
-        recall = sum(len(set(f) & set(t)) for f, t in zip(found, true_labels)) / (len(queries) * k)
+        recall = recall_at_k(found, true_labels)
         self.assertGreater(recall, 0.95, f"recall after churn: {recall}")
         # half the index was churned; no removed label may surface
         removed = set(range(oldest))

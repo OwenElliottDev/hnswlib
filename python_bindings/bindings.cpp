@@ -813,6 +813,8 @@ class Index {
 
 
     void removeItem(size_t label) {
+        // graph repair can be expensive, so let other Python threads run
+        py::gil_scoped_release l;
         appr_alg->removePoint(label);
     }
 
