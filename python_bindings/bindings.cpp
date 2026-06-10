@@ -812,6 +812,11 @@ class Index {
     }
 
 
+    void removeItem(size_t label) {
+        appr_alg->removePoint(label);
+    }
+
+
     void unmarkDeleted(size_t label) {
         appr_alg->unmarkDelete(label);
     }
@@ -1161,6 +1166,7 @@ PYBIND11_PLUGIN(hnswlib) {
             py::arg("allow_replace_deleted") = false)
         .def("mark_deleted", &Index<float>::markDeleted, py::arg("label"))
         .def("unmark_deleted", &Index<float>::unmarkDeleted, py::arg("label"))
+        .def("remove_item", &Index<float>::removeItem, py::arg("label"))
         .def("resize_index", &Index<float>::resizeIndex, py::arg("new_size"))
         .def("get_max_elements", &Index<float>::getMaxElements)
         .def("get_current_count", &Index<float>::getCurrentCount)
