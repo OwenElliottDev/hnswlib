@@ -1352,6 +1352,89 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
+    // Two-phase search for Matryoshka (MRL) embeddings. The graph is scanned
+    // with the index's own distance function (the truncated scan-dim distance
+    // when the index was built with an MrlSpace), then the best rerank_size
+    // candidates are reranked with the provided full-dimension distance
+    // function and the top k of those are returned.
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnnMrl(
+        const void *query_data,
+        size_t k,
+        size_t rerank_size,
+        DISTFUNC<dist_t> full_dist_func,
+        void *full_dist_func_param,
+        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0) return result;
+
+        if (rerank_size < k)
+            rerank_size = k;
+
+        tableint currObj = enterpoint_node_;
+        dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+
+        for (int level = maxlevel_; level > 0; level--) {
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                unsigned int *data;
+
+                data = (unsigned int *) get_linklist(currObj, level);
+                int size = getListCount(data);
+                metric_hops++;
+                metric_distance_computations+=size;
+
+                tableint *datal = (tableint *) (data + 1);
+                for (int i = 0; i < size; i++) {
+                    tableint cand = datal[i];
+                    if (cand < 0 || cand > max_elements_)
+                        throw std::runtime_error("cand error");
+                    dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+
+                    if (d < curdist) {
+                        curdist = d;
+                        currObj = cand;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        bool bare_bone_search = !num_deleted_ && !isIdAllowed;
+        if (bare_bone_search) {
+            top_candidates = searchBaseLayerST<true>(
+                    currObj, query_data, std::max(ef_, rerank_size), isIdAllowed);
+        } else {
+            top_candidates = searchBaseLayerST<false>(
+                    currObj, query_data, std::max(ef_, rerank_size), isIdAllowed);
+        }
+
+        while (top_candidates.size() > rerank_size) {
+            top_candidates.pop();
+        }
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> reranked;
+        while (top_candidates.size() > 0) {
+            tableint candidate_id = top_candidates.top().second;
+            top_candidates.pop();
+            dist_t d = full_dist_func(query_data, getDataByInternalId(candidate_id), full_dist_func_param);
+            reranked.emplace(d, candidate_id);
+        }
+
+        while (reranked.size() > k) {
+            reranked.pop();
+        }
+        while (reranked.size() > 0) {
+            std::pair<dist_t, tableint> rez = reranked.top();
+            result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+            reranked.pop();
+        }
+        return result;
+    }
+
+
     std::vector<std::pair<dist_t, labeltype >>
     searchStopConditionClosest(
         const void *query_data,

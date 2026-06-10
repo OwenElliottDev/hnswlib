@@ -56,8 +56,21 @@ Note that inner product is not an actual metric. An element can be closer to som
 
 For other spaces use the nmslib library https://github.com/nmslib/nmslib. 
 
+#### Matryoshka (MRL) embeddings
+
+For embeddings trained with Matryoshka Representation Learning, the index can scan the graph using only a prefix of each vector and rerank the best candidates at full dimensionality:
+
+```python
+p = hnswlib.Index(space='cosine', dim=512, mrl_scan_dim=64)  # graph is built and scanned at 64 dims
+p.init_index(max_elements=100000)
+p.add_items(data)  # full 512-dim vectors are stored
+labels, distances = p.knn_query(queries, k=10, rerank_size=1000)  # scan at 64 dims, rerank top 1000 at 512 dims
+```
+
+`mrl_scan_dim` is supported for the `l2`, `ip`, and `cosine` spaces (float32). If `rerank_size` is omitted (or 0), queries return distances computed at `mrl_scan_dim` dimensions without reranking. For `cosine`, vectors are normalized at full dimensionality, so the scan phase ranks by inner product over the prefix.
+
 #### API description
-* `hnswlib.Index(space, dim)` creates a non-initialized index an HNSW in space `space` with integer dimension `dim`.
+* `hnswlib.Index(space, dim, mrl_scan_dim = 0)` creates a non-initialized index an HNSW in space `space` with integer dimension `dim`. If `mrl_scan_dim > 0` the index stores full `dim`-dimensional vectors but builds and scans the graph using only the first `mrl_scan_dim` dimensions (for Matryoshka/MRL embeddings); pass `rerank_size` to `knn_query` to rerank at full dimensionality.
 
 `hnswlib.Index` methods:
 * `init_index(max_elements, M = 16, ef_construction = 200, random_seed = 100, allow_replace_deleted = False)` initializes the index from with no elements. 
@@ -83,10 +96,11 @@ For other spaces use the nmslib library https://github.com/nmslib/nmslib.
 * `set_ef(ef)` - sets the query time accuracy/speed trade-off, defined by the `ef` parameter (
 [ALGO_PARAMS.md](ALGO_PARAMS.md)). Note that the parameter is currently not saved along with the index, so you need to set it manually after loading.
 
-* `knn_query(data, k = 1, num_threads = -1, filter = None)` make a batch query for `k` closest elements for each element of the 
+* `knn_query(data, k = 1, num_threads = -1, filter = None, rerank_size = 0)` make a batch query for `k` closest elements for each element of the 
     * `data` (shape:`N*dim`). Returns a numpy array of (shape:`N*k`).
     * `num_threads` sets the number of cpu threads to use (-1 means use default).
     * `filter` filters elements by its labels, returns elements with allowed ids. Note that search with a filter works slow in python in multithreaded mode. It is recommended to set `num_threads=1`
+    * `rerank_size` (MRL indexes only) reranks the best `rerank_size` candidates found at `mrl_scan_dim` dimensions using the full-dimension distance and returns the top `k` of those. Values smaller than `k` are treated as `k`.
     * Thread-safe with other `knn_query` calls, but not with `add_items`.
     
 * `load_index(path_to_index, max_elements = 0, allow_replace_deleted = False)` loads the index from persistence to the uninitialized index.
