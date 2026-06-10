@@ -42,6 +42,14 @@ def make_data(kind, n, dim, rng):
         centers = rng.standard_normal((num_clusters, dim)).astype(np.float32) * 3.0
         assignment = rng.integers(0, num_clusters, n)
         return (centers[assignment] + rng.standard_normal((n, dim)).astype(np.float32)).astype(np.float32)
+    if kind == "matryoshka":
+        # clustered data with exponentially decaying per-dimension variance,
+        # mimicking MRL embeddings where leading dims carry most of the signal
+        scales = np.exp(-np.arange(dim) / (dim / 8)).astype(np.float32)
+        num_clusters = 64
+        centers = rng.standard_normal((num_clusters, dim)).astype(np.float32) * 3.0
+        assignment = rng.integers(0, num_clusters, n)
+        return ((centers[assignment] + rng.standard_normal((n, dim)).astype(np.float32)) * scales).astype(np.float32)
     # otherwise treat as a path to a .npy file of float32 vectors
     data = np.load(kind)
     if data.shape[0] < n:
@@ -54,13 +62,14 @@ def recall_at_k(found_labels, true_labels):
     return hits / float(true_labels.shape[0] * true_labels.shape[1])
 
 
-def measure_qps(index, queries, k, threads, min_seconds=0.5):
+def measure_qps(index, queries, k, threads, min_seconds=0.5, rerank_size=0):
     """Return (qps, labels_of_first_batch)."""
-    labels, _ = index.knn_query(queries, k=k, num_threads=threads)
+    query_kwargs = {"rerank_size": rerank_size} if rerank_size else {}
+    labels, _ = index.knn_query(queries, k=k, num_threads=threads, **query_kwargs)
     batches = 1
     start = time.perf_counter()
     while True:
-        index.knn_query(queries, k=k, num_threads=threads)
+        index.knn_query(queries, k=k, num_threads=threads, **query_kwargs)
         elapsed = time.perf_counter() - start
         if elapsed >= min_seconds:
             break
@@ -86,15 +95,18 @@ def output(args, results):
 
 def bench_static(args):
     rng = np.random.default_rng(args.seed)
+    mrl_scan_dim = getattr(args, "mrl_scan_dim", 0)
     print(f"# static: space={args.space} dim={args.dim} n={args.num_elements} "
-          f"k={args.k} M={args.M} ef_construction={args.ef_construction} dataset={args.dataset}")
+          f"k={args.k} M={args.M} ef_construction={args.ef_construction} dataset={args.dataset}"
+          + (f" mrl_scan_dim={mrl_scan_dim}" if mrl_scan_dim else ""))
 
     data = make_data(args.dataset, args.num_elements + args.num_queries, args.dim, rng)
     queries = data[args.num_elements:]
     data = data[:args.num_elements]
 
     rss_before = rss_mb()
-    index = hnswlib.Index(space=args.space, dim=args.dim)
+    index_kwargs = {"mrl_scan_dim": mrl_scan_dim} if mrl_scan_dim else {}
+    index = hnswlib.Index(space=args.space, dim=args.dim, **index_kwargs)
     index.init_index(max_elements=args.num_elements, M=args.M, ef_construction=args.ef_construction)
     t0 = time.perf_counter()
     index.add_items(data, num_threads=args.build_threads)
@@ -113,16 +125,20 @@ def bench_static(args):
     rows = []
     results = {"mode": "static", "space": args.space, "dim": args.dim,
                "num_elements": args.num_elements, "k": args.k, "M": args.M,
-               "ef_construction": args.ef_construction, "build_seconds": build_s,
+               "ef_construction": args.ef_construction, "mrl_scan_dim": mrl_scan_dim,
+               "build_seconds": build_s,
                "index_file_size_bytes": index.index_file_size(), "peak_rss_mb": rss_after,
                "sweep": []}
+    rerank_sizes = getattr(args, "rerank_size", None) or [0]
     for ef in args.ef:
         index.set_ef(ef)
-        qps, labels = measure_qps(index, queries, args.k, args.query_threads)
-        rec = recall_at_k(labels, true_labels)
-        rows.append([ef, f"{rec:.4f}", f"{qps:.0f}"])
-        results["sweep"].append({"ef": ef, "recall": rec, "qps": qps})
-    print_table(rows, ["ef", f"recall@{args.k}", f"QPS ({args.query_threads} thr)"])
+        for rerank in rerank_sizes:
+            qps, labels = measure_qps(index, queries, args.k, args.query_threads,
+                                      rerank_size=rerank)
+            rec = recall_at_k(labels, true_labels)
+            rows.append([ef, rerank, f"{rec:.4f}", f"{qps:.0f}"])
+            results["sweep"].append({"ef": ef, "rerank_size": rerank, "recall": rec, "qps": qps})
+    print_table(rows, ["ef", "rerank", f"recall@{args.k}", f"QPS ({args.query_threads} thr)"])
     output(args, results)
 
 
@@ -236,7 +252,11 @@ def main():
     common.add_argument("--seed", type=int, default=42)
     common.add_argument("--json", help="write results to this JSON file")
 
-    sub.add_parser("static", parents=[common], help="recall/QPS sweep on a fixed index")
+    static_p = sub.add_parser("static", parents=[common], help="recall/QPS sweep on a fixed index")
+    static_p.add_argument("--mrl-scan-dim", type=int, default=0,
+                          help="build/scan the graph at this many leading dims (MRL indexes; 0 = off)")
+    static_p.add_argument("--rerank-size", type=int, nargs="+", default=[0],
+                          help="rerank set sizes to sweep for MRL full-dim reranking (0 = no rerank)")
 
     churn_p = sub.add_parser("churn", parents=[common],
                              help="interleaved delete/insert/query traffic")
