@@ -9,9 +9,10 @@ int main() {
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     // Initing index with allow_replace_deleted=true
-    int seed = 100; 
+    int seed = 100;
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, seed, true);
+    hnswlib::HierarchicalNSW<float>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, seed, true);
 
     // Generate random data
     std::mt19937 rng;

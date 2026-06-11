@@ -28,25 +28,15 @@ class MrlSpace : public SpaceInterface<float> {
         }
     }
 
-    size_t get_data_size() {
-        return full_space_->get_data_size();
-    }
+    size_t get_data_size() { return full_space_->get_data_size(); }
 
-    DISTFUNC<float> get_dist_func() {
-        return scan_space_->get_dist_func();
-    }
+    DISTFUNC<float> get_dist_func() { return scan_space_->get_dist_func(); }
 
-    void *get_dist_func_param() {
-        return scan_space_->get_dist_func_param();
-    }
+    void* get_dist_func_param() { return scan_space_->get_dist_func_param(); }
 
-    DISTFUNC<float> get_full_dist_func() {
-        return full_space_->get_dist_func();
-    }
+    DISTFUNC<float> get_full_dist_func() { return full_space_->get_dist_func(); }
 
-    void *get_full_dist_func_param() {
-        return full_space_->get_dist_func_param();
-    }
+    void* get_full_dist_func_param() { return full_space_->get_dist_func_param(); }
 
     ~MrlSpace() {
         delete scan_space_;

@@ -3,7 +3,7 @@
 #include <chrono>
 
 
-template<class Function>
+template <class Function>
 inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn) {
     if (numThreads <= 0) {
         numThreads = std::thread::hardware_concurrency();
@@ -48,7 +48,7 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
                 }
             }));
         }
-        for (auto &thread : threads) {
+        for (auto& thread : threads) {
             thread.join();
         }
         if (lastException) {
@@ -90,12 +90,12 @@ int main() {
 
     int iter = 0;
     while (iter < 200) {
-        hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, 16, 200, 123, true);
+        hnswlib::HierarchicalNSW<float>* alg_hnsw =
+            new hnswlib::HierarchicalNSW<float>(&space, max_elements, 16, 200, 123, true);
 
         // add batch1 data
-        ParallelFor(0, max_elements, num_threads, [&](size_t row, size_t threadId) {
-            alg_hnsw->addPoint((void*)(batch1 + d * row), row);
-        });
+        ParallelFor(0, max_elements, num_threads,
+                    [&](size_t row, size_t threadId) { alg_hnsw->addPoint((void*)(batch1 + d * row), row); });
 
         // delete half random elements of batch1 data
         for (int i = 0; i < num_elements; i++) {
@@ -112,7 +112,7 @@ int main() {
 
         delete alg_hnsw;
     }
-    
+
     std::cout << "Finish" << std::endl;
 
     delete[] batch1;

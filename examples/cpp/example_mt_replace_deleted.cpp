@@ -5,7 +5,7 @@
 // Multithreaded executor
 // The helper function copied from python_bindings/bindings.cpp (and that itself is copied from nmslib)
 // An alternative is using #pragme omp parallel for or any other C++ threading
-template<class Function>
+template <class Function>
 inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn) {
     if (numThreads <= 0) {
         numThreads = std::thread::hardware_concurrency();
@@ -50,7 +50,7 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
                 }
             }));
         }
-        for (auto &thread : threads) {
+        for (auto& thread : threads) {
             thread.join();
         }
         if (lastException) {
@@ -69,9 +69,10 @@ int main() {
     int num_threads = 20;       // Number of threads for operations with index
 
     // Initing index with allow_replace_deleted=true
-    int seed = 100; 
+    int seed = 100;
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, seed, true);
+    hnswlib::HierarchicalNSW<float>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, seed, true);
 
     // Generate random data
     std::mt19937 rng;
@@ -83,15 +84,12 @@ int main() {
     }
 
     // Add data to index
-    ParallelFor(0, max_elements, num_threads, [&](size_t row, size_t threadId) {
-        alg_hnsw->addPoint((void*)(data + dim * row), row);
-    });
+    ParallelFor(0, max_elements, num_threads,
+                [&](size_t row, size_t threadId) { alg_hnsw->addPoint((void*)(data + dim * row), row); });
 
     // Mark first half of elements as deleted
     int num_deleted = max_elements / 2;
-    ParallelFor(0, num_deleted, num_threads, [&](size_t row, size_t threadId) {
-        alg_hnsw->markDelete(row);
-    });
+    ParallelFor(0, num_deleted, num_threads, [&](size_t row, size_t threadId) { alg_hnsw->markDelete(row); });
 
     // Generate additional random data
     float* add_data = new float[dim * num_deleted];
