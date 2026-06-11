@@ -196,8 +196,10 @@ class Index {
             l2space = new hnswlib::InnerProductBFloat16Space(dim);
             is_bf16_space = true;
             normalize = true;
+        } else if (space_name == "geodegrees") {
+            l2space = new hnswlib::GeoDegreesSpace(dim);
         } else {
-            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, or cosine_bf16.");
+            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, cosine_bf16, or geodegrees.");
         }
         appr_alg = NULL;
         ep_added = true;
@@ -881,8 +883,10 @@ class BFIndex {
             space = new hnswlib::InnerProductBFloat16Space(dim);
             is_bf16_space = true;
             normalize = true;
+        } else if (space_name == "geodegrees") {
+            space = new hnswlib::GeoDegreesSpace(dim);
         } else {
-            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, or cosine_bf16.");
+            throw std::runtime_error("Space name must be one of l2, ip, cosine, l2_f16, ip_f16, cosine_f16, l2_bf16, ip_bf16, cosine_bf16, or geodegrees.");
         }
         alg = NULL;
         index_inited = false;
@@ -1048,6 +1052,23 @@ class BFIndex {
 
                     std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
                         (void*)f16_buf.data(), k, p_idFilter);
+                    if (result.size() != k)
+                        throw std::runtime_error(
+                            "Cannot return the results in a contiguous 2D array. There are not enough elements.");
+                    for (int i = k - 1; i >= 0; i--) {
+                        auto& result_tuple = result.top();
+                        data_numpy_d[row * k + i] = result_tuple.first;
+                        data_numpy_l[row * k + i] = result_tuple.second;
+                        result.pop();
+                    }
+                });
+            } else if (!normalize) {
+                ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
+                        (void*)items.data(row), k, p_idFilter);
+                    if (result.size() != k)
+                        throw std::runtime_error(
+                            "Cannot return the results in a contiguous 2D array. There are not enough elements.");
                     for (int i = k - 1; i >= 0; i--) {
                         auto& result_tuple = result.top();
                         data_numpy_d[row * k + i] = result_tuple.first;
@@ -1056,9 +1077,16 @@ class BFIndex {
                     }
                 });
             } else {
+                std::vector<float> norm_array(num_threads * features);
                 ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
+                    size_t start_idx = threadId * dim;
+                    normalize_vector((float*)items.data(row), norm_array.data() + start_idx);
+
                     std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = alg->searchKnn(
-                        (void*)items.data(row), k, p_idFilter);
+                        (void*)(norm_array.data() + start_idx), k, p_idFilter);
+                    if (result.size() != k)
+                        throw std::runtime_error(
+                            "Cannot return the results in a contiguous 2D array. There are not enough elements.");
                     for (int i = k - 1; i >= 0; i--) {
                         auto& result_tuple = result.top();
                         data_numpy_d[row * k + i] = result_tuple.first;
