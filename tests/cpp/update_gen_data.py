@@ -25,7 +25,7 @@ print("Saving...")
 
 try:
     os.mkdir("data")
-except OSError as e:
+except OSError:
     pass
 
 for idx, batch_dummy in enumerate(batches_dummy):
