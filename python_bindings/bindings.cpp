@@ -157,19 +157,34 @@ class Index {
     bool normalize;
     bool is_f16_space;
     bool is_bf16_space;
+    int mrl_scan_dim;
     int num_threads_default;
     hnswlib::labeltype cur_l;
     hnswlib::HierarchicalNSW<dist_t>* appr_alg;
     hnswlib::SpaceInterface<float>* l2space;
 
     bool is_uint16_space() const { return is_f16_space || is_bf16_space; }
+    bool is_mrl_index() const { return mrl_scan_dim > 0; }
 
 
-    Index(const std::string &space_name, const int dim) : space_name(space_name), dim(dim) {
+    Index(const std::string &space_name, const int dim, const int mrl_scan_dim = 0)
+        : space_name(space_name), dim(dim), mrl_scan_dim(mrl_scan_dim) {
         normalize = false;
         is_f16_space = false;
         is_bf16_space = false;
-        if (space_name == "l2") {
+        if (mrl_scan_dim != 0 && (mrl_scan_dim < 0 || mrl_scan_dim >= dim))
+            throw std::runtime_error("mrl_scan_dim must be greater than 0 and less than dim.");
+        if (is_mrl_index()) {
+            auto make_inner = [&](int d) -> hnswlib::SpaceInterface<float>* {
+                if (space_name == "l2")
+                    return new hnswlib::L2Space(d);
+                if (space_name == "ip" || space_name == "cosine")
+                    return new hnswlib::InnerProductSpace(d);
+                throw std::runtime_error("MRL (mrl_scan_dim) is only supported for l2, ip, and cosine spaces.");
+            };
+            normalize = (space_name == "cosine");
+            l2space = new hnswlib::MrlSpace(make_inner(mrl_scan_dim), make_inner(dim));
+        } else if (space_name == "l2") {
             l2space = new hnswlib::L2Space(dim);
         } else if (space_name == "ip") {
             l2space = new hnswlib::InnerProductSpace(dim);
@@ -556,6 +571,7 @@ class Index {
             "index_inited"_a = index_inited,
             "ep_added"_a = ep_added,
             "normalize"_a = normalize,
+            "mrl_scan_dim"_a = mrl_scan_dim,
             "num_threads"_a = num_threads_default,
             "seed"_a = seed);
 
@@ -575,8 +591,9 @@ class Index {
         auto space_name_ = d["space"].cast<std::string>();
         auto dim_ = d["dim"].cast<int>();
         auto index_inited_ = d["index_inited"].cast<bool>();
+        int mrl_scan_dim_ = d.contains("mrl_scan_dim") ? d["mrl_scan_dim"].cast<int>() : 0;
 
-        Index<float>* new_index = new Index<float>(space_name_, dim_);
+        Index<float>* new_index = new Index<float>(space_name_, dim_, mrl_scan_dim_);
 
         /*  TODO: deserialize state of random generators into new_index->level_generator_ and new_index->update_probability_generator_  */
         /*        for full reproducibility / state of generators is serialized inside Index::getIndexParams                      */
@@ -699,7 +716,8 @@ class Index {
         py::object input,
         size_t k = 1,
         int num_threads = -1,
-        const std::function<bool(hnswlib::labeltype)>& filter = nullptr) {
+        const std::function<bool(hnswlib::labeltype)>& filter = nullptr,
+        size_t rerank_size = 0) {
         py::array_t < dist_t, py::array::c_style | py::array::forcecast > items(input);
         auto buffer = items.request();
         hnswlib::labeltype* data_numpy_l;
@@ -708,6 +726,9 @@ class Index {
 
         if (num_threads <= 0)
             num_threads = num_threads_default;
+
+        if (rerank_size > 0 && !is_mrl_index())
+            throw std::invalid_argument("rerank_size requires an index created with mrl_scan_dim > 0.");
 
         {
             py::gil_scoped_release l;
@@ -724,6 +745,15 @@ class Index {
             // Warning: search with a filter works slow in python in multithreaded mode. For best performance set num_threads=1
             CustomFilterFunctor idFilter(filter);
             CustomFilterFunctor* p_idFilter = filter ? &idFilter : nullptr;
+
+            hnswlib::MrlSpace* mrl_space = rerank_size > 0 ? static_cast<hnswlib::MrlSpace*>(l2space) : nullptr;
+            auto search_one = [&](const void* query) {
+                if (mrl_space)
+                    return appr_alg->searchKnnMrl(
+                        query, k, rerank_size, mrl_space->get_full_dist_func(),
+                        mrl_space->get_full_dist_func_param(), p_idFilter);
+                return appr_alg->searchKnn(query, k, p_idFilter);
+            };
 
             if (is_uint16_space()) {
                 std::vector<float> norm_array(normalize ? num_threads * features : 0);
@@ -751,8 +781,8 @@ class Index {
                 });
             } else if (normalize == false) {
                 ParallelFor(0, rows, num_threads, [&](size_t row, size_t threadId) {
-                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = appr_alg->searchKnn(
-                        (void*)items.data(row), k, p_idFilter);
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = search_one(
+                        (void*)items.data(row));
                     if (result.size() != k)
                         throw std::runtime_error(
                             "Cannot return the results in a contiguous 2D array. Probably ef or M is too small");
@@ -771,8 +801,8 @@ class Index {
                     size_t start_idx = threadId * dim;
                     normalize_vector((float*)items.data(row), (norm_array.data() + start_idx));
 
-                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = appr_alg->searchKnn(
-                        (void*)(norm_array.data() + start_idx), k, p_idFilter);
+                    std::priority_queue<std::pair<dist_t, hnswlib::labeltype >> result = search_one(
+                        (void*)(norm_array.data() + start_idx));
                     if (result.size() != k)
                         throw std::runtime_error(
                             "Cannot return the results in a contiguous 2D array. Probably ef or M is too small");
@@ -1128,7 +1158,10 @@ PYBIND11_PLUGIN(hnswlib) {
         .def(py::init(&Index<float>::createFromParams), py::arg("params"))
            /* WARNING: Index::createFromIndex is not thread-safe with Index::addItems */
         .def(py::init(&Index<float>::createFromIndex), py::arg("index"))
-        .def(py::init<const std::string &, const int>(), py::arg("space"), py::arg("dim"))
+        .def(py::init<const std::string &, const int, const int>(),
+            py::arg("space"),
+            py::arg("dim"),
+            py::arg("mrl_scan_dim") = 0)
         .def("init_index",
             &Index<float>::init_new_index,
             py::arg("max_elements"),
@@ -1141,7 +1174,8 @@ PYBIND11_PLUGIN(hnswlib) {
             py::arg("data"),
             py::arg("k") = 1,
             py::arg("num_threads") = -1,
-            py::arg("filter") = py::none())
+            py::arg("filter") = py::none(),
+            py::arg("rerank_size") = 0)
         .def("add_items",
             &Index<float>::addItems,
             py::arg("data"),
@@ -1166,6 +1200,7 @@ PYBIND11_PLUGIN(hnswlib) {
         .def("get_current_count", &Index<float>::getCurrentCount)
         .def_readonly("space", &Index<float>::space_name)
         .def_readonly("dim", &Index<float>::dim)
+        .def_readonly("mrl_scan_dim", &Index<float>::mrl_scan_dim)
         .def_readwrite("num_threads", &Index<float>::num_threads_default)
         .def_property("ef",
           [](const Index<float> & index) {
