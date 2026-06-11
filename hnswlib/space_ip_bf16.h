@@ -3,11 +3,10 @@
 
 namespace hnswlib {
 
-static float
-InnerProductBF16(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
 
     float res = 0;
     for (size_t i = 0; i < qty; i++) {
@@ -16,18 +15,16 @@ InnerProductBF16(const void *pVect1v, const void *pVect2v, const void *qty_ptr) 
     return res;
 }
 
-static float
-InnerProductDistanceBF16(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16(pVect1v, pVect2v, qty_ptr);
 }
 
 #if defined(USE_AVX512)
 
-static float
-InnerProductBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty16 = qty >> 4;
 
     const uint16_t *pEnd1 = pVect1 + (qty16 << 4);
@@ -35,8 +32,8 @@ InnerProductBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const 
     __m512 sum = _mm512_setzero_ps();
 
     while (pVect1 < pEnd1) {
-        __m256i h1 = _mm256_loadu_si256((__m256i const*)pVect1);
-        __m256i h2 = _mm256_loadu_si256((__m256i const*)pVect2);
+        __m256i h1 = _mm256_loadu_si256((__m256i const *)pVect1);
+        __m256i h2 = _mm256_loadu_si256((__m256i const *)pVect2);
 
         __m512 v1 = _mm512_castsi512_ps(_mm512_slli_epi32(_mm512_cvtepu16_epi32(h1), 16));
         __m512 v2 = _mm512_castsi512_ps(_mm512_slli_epi32(_mm512_cvtepu16_epi32(h2), 16));
@@ -49,14 +46,12 @@ InnerProductBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const 
 
     float PORTABLE_ALIGN64 TmpRes[16];
     _mm512_store_ps(TmpRes, sum);
-    float res = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] +
-            TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] + TmpRes[12] +
-            TmpRes[13] + TmpRes[14] + TmpRes[15];
+    float res = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] +
+                TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] + TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
     return res;
 }
 
-static float
-InnerProductDistanceBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD16ExtAVX512(pVect1v, pVect2v, qty_ptr);
 }
 
@@ -64,11 +59,10 @@ InnerProductDistanceBF16SIMD16ExtAVX512(const void *pVect1v, const void *pVect2v
 
 #if defined(USE_AVX)
 
-static float
-InnerProductBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     float PORTABLE_ALIGN32 TmpRes[8];
     size_t qty16 = qty >> 4;
 
@@ -77,14 +71,14 @@ InnerProductBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const voi
     __m256 sum = _mm256_setzero_ps();
 
     while (pVect1 < pEnd1) {
-        __m128i h1 = _mm_loadu_si128((__m128i const*)pVect1);
-        __m128i h2 = _mm_loadu_si128((__m128i const*)pVect2);
+        __m128i h1 = _mm_loadu_si128((__m128i const *)pVect1);
+        __m128i h2 = _mm_loadu_si128((__m128i const *)pVect2);
         __m256 f1 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h1), 16));
         __m256 f2 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h2), 16));
         sum = _mm256_add_ps(sum, _mm256_mul_ps(f1, f2));
 
-        h1 = _mm_loadu_si128((__m128i const*)(pVect1 + 8));
-        h2 = _mm_loadu_si128((__m128i const*)(pVect2 + 8));
+        h1 = _mm_loadu_si128((__m128i const *)(pVect1 + 8));
+        h2 = _mm_loadu_si128((__m128i const *)(pVect2 + 8));
         f1 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h1), 16));
         f2 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h2), 16));
         sum = _mm256_add_ps(sum, _mm256_mul_ps(f1, f2));
@@ -97,16 +91,14 @@ InnerProductBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const voi
     return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7];
 }
 
-static float
-InnerProductDistanceBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD16ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD16ExtAVX(pVect1v, pVect2v, qty_ptr);
 }
 
-static float
-InnerProductBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     float PORTABLE_ALIGN32 TmpRes[8];
 
     size_t qty16 = qty / 16;
@@ -118,14 +110,14 @@ InnerProductBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void
     __m256 sum256 = _mm256_setzero_ps();
 
     while (pVect1 < pEnd1) {
-        __m128i h1 = _mm_loadu_si128((__m128i const*)pVect1);
-        __m128i h2 = _mm_loadu_si128((__m128i const*)pVect2);
+        __m128i h1 = _mm_loadu_si128((__m128i const *)pVect1);
+        __m128i h2 = _mm_loadu_si128((__m128i const *)pVect2);
         __m256 f1 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h1), 16));
         __m256 f2 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h2), 16));
         sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(f1, f2));
 
-        h1 = _mm_loadu_si128((__m128i const*)(pVect1 + 8));
-        h2 = _mm_loadu_si128((__m128i const*)(pVect2 + 8));
+        h1 = _mm_loadu_si128((__m128i const *)(pVect1 + 8));
+        h2 = _mm_loadu_si128((__m128i const *)(pVect2 + 8));
         f1 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h1), 16));
         f2 = _mm256_castsi256_ps(_mm256_slli_epi32(_mm256_cvtepu16_epi32(h2), 16));
         sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(f1, f2));
@@ -138,8 +130,8 @@ InnerProductBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void
     __m128i zero = _mm_setzero_si128();
 
     while (pVect1 < pEnd2) {
-        __m128i h1 = _mm_loadl_epi64((__m128i const*)pVect1);
-        __m128i h2 = _mm_loadl_epi64((__m128i const*)pVect2);
+        __m128i h1 = _mm_loadl_epi64((__m128i const *)pVect1);
+        __m128i h2 = _mm_loadl_epi64((__m128i const *)pVect2);
         __m128 f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         __m128 f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
@@ -152,8 +144,7 @@ InnerProductBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void
     return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3];
 }
 
-static float
-InnerProductDistanceBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD4ExtAVX(pVect1v, pVect2v, qty_ptr);
 }
 
@@ -161,11 +152,10 @@ InnerProductDistanceBF16SIMD4ExtAVX(const void *pVect1v, const void *pVect2v, co
 
 #if defined(USE_SSE)
 
-static float
-InnerProductBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     float PORTABLE_ALIGN32 TmpRes[8];
 
     size_t qty4 = qty / 4;
@@ -176,8 +166,8 @@ InnerProductBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void
     __m128i zero = _mm_setzero_si128();
 
     while (pVect1 < pEnd1) {
-        __m128i h1 = _mm_loadl_epi64((__m128i const*)pVect1);
-        __m128i h2 = _mm_loadl_epi64((__m128i const*)pVect2);
+        __m128i h1 = _mm_loadl_epi64((__m128i const *)pVect1);
+        __m128i h2 = _mm_loadl_epi64((__m128i const *)pVect2);
         __m128 f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         __m128 f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
@@ -190,16 +180,14 @@ InnerProductBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void
     return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3];
 }
 
-static float
-InnerProductDistanceBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD4ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD4ExtSSE(pVect1v, pVect2v, qty_ptr);
 }
 
-static float
-InnerProductBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     float PORTABLE_ALIGN32 TmpRes[8];
 
     size_t qty16 = qty / 16;
@@ -210,26 +198,26 @@ InnerProductBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const voi
     __m128i zero = _mm_setzero_si128();
 
     while (pVect1 < pEnd1) {
-        __m128i h1 = _mm_loadl_epi64((__m128i const*)pVect1);
-        __m128i h2 = _mm_loadl_epi64((__m128i const*)pVect2);
+        __m128i h1 = _mm_loadl_epi64((__m128i const *)pVect1);
+        __m128i h2 = _mm_loadl_epi64((__m128i const *)pVect2);
         __m128 f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         __m128 f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
 
-        h1 = _mm_loadl_epi64((__m128i const*)(pVect1 + 4));
-        h2 = _mm_loadl_epi64((__m128i const*)(pVect2 + 4));
+        h1 = _mm_loadl_epi64((__m128i const *)(pVect1 + 4));
+        h2 = _mm_loadl_epi64((__m128i const *)(pVect2 + 4));
         f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
 
-        h1 = _mm_loadl_epi64((__m128i const*)(pVect1 + 8));
-        h2 = _mm_loadl_epi64((__m128i const*)(pVect2 + 8));
+        h1 = _mm_loadl_epi64((__m128i const *)(pVect1 + 8));
+        h2 = _mm_loadl_epi64((__m128i const *)(pVect2 + 8));
         f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
 
-        h1 = _mm_loadl_epi64((__m128i const*)(pVect1 + 12));
-        h2 = _mm_loadl_epi64((__m128i const*)(pVect2 + 12));
+        h1 = _mm_loadl_epi64((__m128i const *)(pVect1 + 12));
+        h2 = _mm_loadl_epi64((__m128i const *)(pVect2 + 12));
         f1 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h1));
         f2 = _mm_castsi128_ps(_mm_unpacklo_epi16(zero, h2));
         sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(f1, f2));
@@ -242,8 +230,7 @@ InnerProductBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const voi
     return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3];
 }
 
-static float
-InnerProductDistanceBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD16ExtSSE(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD16ExtSSE(pVect1v, pVect2v, qty_ptr);
 }
 
@@ -255,29 +242,27 @@ static DISTFUNC<float> InnerProductBF16SIMD4Ext = InnerProductBF16SIMD4ExtSSE;
 static DISTFUNC<float> InnerProductDistanceBF16SIMD16Ext = InnerProductDistanceBF16SIMD16ExtSSE;
 static DISTFUNC<float> InnerProductDistanceBF16SIMD4Ext = InnerProductDistanceBF16SIMD4ExtSSE;
 
-static float
-InnerProductDistanceBF16SIMD16ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductDistanceBF16SIMD16ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty16 = qty >> 4 << 4;
     float res = InnerProductBF16SIMD16Ext(pVect1v, pVect2v, &qty16);
-    uint16_t *pVect1 = (uint16_t *) pVect1v + qty16;
-    uint16_t *pVect2 = (uint16_t *) pVect2v + qty16;
+    uint16_t *pVect1 = (uint16_t *)pVect1v + qty16;
+    uint16_t *pVect2 = (uint16_t *)pVect2v + qty16;
 
     size_t qty_left = qty - qty16;
     float res_tail = InnerProductBF16(pVect1, pVect2, &qty_left);
     return 1.0f - (res + res_tail);
 }
 
-static float
-InnerProductDistanceBF16SIMD4ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductDistanceBF16SIMD4ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty4 = qty >> 2 << 2;
 
     float res = InnerProductBF16SIMD4Ext(pVect1v, pVect2v, &qty4);
     size_t qty_left = qty - qty4;
 
-    uint16_t *pVect1 = (uint16_t *) pVect1v + qty4;
-    uint16_t *pVect2 = (uint16_t *) pVect2v + qty4;
+    uint16_t *pVect1 = (uint16_t *)pVect1v + qty4;
+    uint16_t *pVect2 = (uint16_t *)pVect2v + qty4;
     float res_tail = InnerProductBF16(pVect1, pVect2, &qty_left);
 
     return 1.0f - (res + res_tail);
@@ -286,11 +271,10 @@ InnerProductDistanceBF16SIMD4ExtResiduals(const void *pVect1v, const void *pVect
 
 #if defined(USE_NEON)
 
-static float
-InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty16 = qty >> 4;
 
     const uint16_t *pEnd1 = pVect1 + (qty16 << 4);
@@ -302,11 +286,8 @@ InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const vo
     float32x4_t sum1 = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
-        sum0 = vbfdotq_f32(sum0,
-                           vreinterpretq_bf16_u16(vld1q_u16(pVect1)),
-                           vreinterpretq_bf16_u16(vld1q_u16(pVect2)));
-        sum1 = vbfdotq_f32(sum1,
-                           vreinterpretq_bf16_u16(vld1q_u16(pVect1 + 8)),
+        sum0 = vbfdotq_f32(sum0, vreinterpretq_bf16_u16(vld1q_u16(pVect1)), vreinterpretq_bf16_u16(vld1q_u16(pVect2)));
+        sum1 = vbfdotq_f32(sum1, vreinterpretq_bf16_u16(vld1q_u16(pVect1 + 8)),
                            vreinterpretq_bf16_u16(vld1q_u16(pVect2 + 8)));
 
         pVect1 += 16;
@@ -348,16 +329,14 @@ InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const vo
 #endif
 }
 
-static float
-InnerProductDistanceBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD16ExtNEON(pVect1v, pVect2v, qty_ptr);
 }
 
-static float
-InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    uint16_t *pVect1 = (uint16_t *) pVect1v;
-    uint16_t *pVect2 = (uint16_t *) pVect2v;
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    uint16_t *pVect1 = (uint16_t *)pVect1v;
+    uint16_t *pVect2 = (uint16_t *)pVect2v;
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty4 = qty >> 2;
 
     const uint16_t *pEnd1 = pVect1 + (qty4 << 2);
@@ -366,9 +345,7 @@ InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const voi
     float32x2_t sum = vdup_n_f32(0);
 
     while (pVect1 < pEnd1) {
-        sum = vbfdot_f32(sum,
-                         vreinterpret_bf16_u16(vld1_u16(pVect1)),
-                         vreinterpret_bf16_u16(vld1_u16(pVect2)));
+        sum = vbfdot_f32(sum, vreinterpret_bf16_u16(vld1_u16(pVect1)), vreinterpret_bf16_u16(vld1_u16(pVect2)));
 
         pVect1 += 4;
         pVect2 += 4;
@@ -391,34 +368,31 @@ InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const voi
 #endif
 }
 
-static float
-InnerProductDistanceBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+static float InnerProductDistanceBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return 1.0f - InnerProductBF16SIMD4ExtNEON(pVect1v, pVect2v, qty_ptr);
 }
 
-static float
-InnerProductDistanceBF16SIMD16ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductDistanceBF16SIMD16ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty16 = qty >> 4 << 4;
     float res = InnerProductBF16SIMD16ExtNEON(pVect1v, pVect2v, &qty16);
-    uint16_t *pVect1 = (uint16_t *) pVect1v + qty16;
-    uint16_t *pVect2 = (uint16_t *) pVect2v + qty16;
+    uint16_t *pVect1 = (uint16_t *)pVect1v + qty16;
+    uint16_t *pVect2 = (uint16_t *)pVect2v + qty16;
 
     size_t qty_left = qty - qty16;
     float res_tail = InnerProductBF16(pVect1, pVect2, &qty_left);
     return 1.0f - (res + res_tail);
 }
 
-static float
-InnerProductDistanceBF16SIMD4ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    size_t qty = *((size_t *) qty_ptr);
+static float InnerProductDistanceBF16SIMD4ExtResiduals(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    size_t qty = *((size_t *)qty_ptr);
     size_t qty4 = qty >> 2 << 2;
 
     float res = InnerProductBF16SIMD4ExtNEON(pVect1v, pVect2v, &qty4);
     size_t qty_left = qty - qty4;
 
-    uint16_t *pVect1 = (uint16_t *) pVect1v + qty4;
-    uint16_t *pVect2 = (uint16_t *) pVect2v + qty4;
+    uint16_t *pVect1 = (uint16_t *)pVect1v + qty4;
+    uint16_t *pVect2 = (uint16_t *)pVect2v + qty4;
     float res_tail = InnerProductBF16(pVect1, pVect2, &qty_left);
 
     return 1.0f - (res + res_tail);
@@ -435,7 +409,7 @@ class InnerProductBFloat16Space : public SpaceInterface<float> {
     InnerProductBFloat16Space(size_t dim) {
         fstdistfunc_ = InnerProductDistanceBF16;
 #if defined(USE_SSE)
-    #if defined(USE_AVX512)
+#if defined(USE_AVX512)
         if (AVX512Capable()) {
             InnerProductBF16SIMD16Ext = InnerProductBF16SIMD16ExtAVX512;
             InnerProductDistanceBF16SIMD16Ext = InnerProductDistanceBF16SIMD16ExtAVX512;
@@ -443,18 +417,18 @@ class InnerProductBFloat16Space : public SpaceInterface<float> {
             InnerProductBF16SIMD16Ext = InnerProductBF16SIMD16ExtAVX;
             InnerProductDistanceBF16SIMD16Ext = InnerProductDistanceBF16SIMD16ExtAVX;
         }
-    #elif defined(USE_AVX)
+#elif defined(USE_AVX)
         if (AVXCapable()) {
             InnerProductBF16SIMD16Ext = InnerProductBF16SIMD16ExtAVX;
             InnerProductDistanceBF16SIMD16Ext = InnerProductDistanceBF16SIMD16ExtAVX;
         }
-    #endif
-    #if defined(USE_AVX)
+#endif
+#if defined(USE_AVX)
         if (AVXCapable()) {
             InnerProductBF16SIMD4Ext = InnerProductBF16SIMD4ExtAVX;
             InnerProductDistanceBF16SIMD4Ext = InnerProductDistanceBF16SIMD4ExtAVX;
         }
-    #endif
+#endif
 
         if (dim % 16 == 0)
             fstdistfunc_ = InnerProductDistanceBF16SIMD16Ext;
@@ -478,17 +452,11 @@ class InnerProductBFloat16Space : public SpaceInterface<float> {
         data_size_ = dim * sizeof(uint16_t);
     }
 
-    size_t get_data_size() {
-        return data_size_;
-    }
+    size_t get_data_size() { return data_size_; }
 
-    DISTFUNC<float> get_dist_func() {
-        return fstdistfunc_;
-    }
+    DISTFUNC<float> get_dist_func() { return fstdistfunc_; }
 
-    void *get_dist_func_param() {
-        return &dim_;
-    }
+    void *get_dist_func_param() { return &dim_; }
 
     ~InnerProductBFloat16Space() {}
 };

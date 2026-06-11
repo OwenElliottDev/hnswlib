@@ -12,16 +12,17 @@ int main() {
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     int num_queries = 100;
-    int num_docs = 10;          // Number of documents to search
-    int ef_collection = 15;     // Number of candidate documents during the search
-                                // Controlls the recall: higher ef leads to better accuracy, but slower search
+    int num_docs = 10;       // Number of documents to search
+    int ef_collection = 15;  // Number of candidate documents during the search
+                             // Controlls the recall: higher ef leads to better accuracy, but slower search
     docidtype min_doc_id = 0;
     docidtype max_doc_id = 49;
 
     // Initing index
     hnswlib::MultiVectorL2Space<docidtype> space(dim);
     hnswlib::BruteforceSearch<dist_t>* alg_brute = new hnswlib::BruteforceSearch<dist_t>(&space, max_elements);
-    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw = new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -73,7 +74,7 @@ int main() {
         // check number of found documents
         std::unordered_set<docidtype> hnsw_docs;
         std::unordered_set<hnswlib::labeltype> hnsw_labels;
-        for (auto pair: hnsw_results) {
+        for (auto pair : hnsw_results) {
             hnswlib::labeltype label = pair.second;
             hnsw_labels.emplace(label);
             docidtype doc_id = label_docid_lookup[label];
@@ -82,7 +83,7 @@ int main() {
         assert(hnsw_docs.size() == num_docs);
 
         // Check overall recall
-        std::vector<std::pair<dist_t, hnswlib::labeltype>> gt_results = 
+        std::vector<std::pair<dist_t, hnswlib::labeltype>> gt_results =
             alg_brute->searchKnnCloserFirst(query_data, max_elements);
         std::unordered_set<docidtype> gt_docs;
         for (int i = 0; i < gt_results.size(); i++) {
@@ -113,7 +114,8 @@ int main() {
         if (!result.empty()) {
             label = result[0].second;
         }
-        if (label == i) correct++;
+        if (label == i)
+            correct++;
     }
     recall = correct / max_elements;
     std::cout << "same elements search recall : " << recall << "\n";

@@ -6,18 +6,14 @@ class StopW {
     std::chrono::steady_clock::time_point time_begin;
 
  public:
-    StopW() {
-        time_begin = std::chrono::steady_clock::now();
-    }
+    StopW() { time_begin = std::chrono::steady_clock::now(); }
 
     float getElapsedTimeMicro() {
         std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
         return (std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_begin).count());
     }
 
-    void reset() {
-        time_begin = std::chrono::steady_clock::now();
-    }
+    void reset() { time_begin = std::chrono::steady_clock::now(); }
 };
 
 
@@ -26,9 +22,9 @@ class StopW {
  * only handles a subset of functionality (no reductions etc)
  * Process ids from start (inclusive) to end (EXCLUSIVE)
  *
- * The method is borrowed from nmslib 
+ * The method is borrowed from nmslib
  */
-template<class Function>
+template <class Function>
 inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn) {
     if (numThreads <= 0) {
         numThreads = std::thread::hardware_concurrency();
@@ -104,14 +100,14 @@ std::vector<datatype> load_batch(std::string path, int size) {
 
 
 template <typename d_type>
-static float
-test_approx(std::vector<float> &queries, size_t qsize, hnswlib::HierarchicalNSW<d_type> &appr_alg, size_t vecdim,
-            std::vector<std::unordered_set<hnswlib::labeltype>> &answers, size_t K) {
+static float test_approx(std::vector<float> &queries, size_t qsize, hnswlib::HierarchicalNSW<d_type> &appr_alg,
+                         size_t vecdim, std::vector<std::unordered_set<hnswlib::labeltype>> &answers, size_t K) {
     size_t correct = 0;
     size_t total = 0;
 
     for (int i = 0; i < qsize; i++) {
-        std::priority_queue<std::pair<d_type, hnswlib::labeltype>> result = appr_alg.searchKnn((char *)(queries.data() + vecdim * i), K);
+        std::priority_queue<std::pair<d_type, hnswlib::labeltype>> result =
+            appr_alg.searchKnn((char *)(queries.data() + vecdim * i), K);
         total += K;
         while (result.size()) {
             if (answers[i].find(result.top().second) != answers[i].end()) {
@@ -125,20 +121,13 @@ test_approx(std::vector<float> &queries, size_t qsize, hnswlib::HierarchicalNSW<
 }
 
 
-static void
-test_vs_recall(
-    std::vector<float> &queries,
-    size_t qsize,
-    hnswlib::HierarchicalNSW<float> &appr_alg,
-    size_t vecdim,
-    std::vector<std::unordered_set<hnswlib::labeltype>> &answers,
-    size_t k) {
-
+static void test_vs_recall(std::vector<float> &queries, size_t qsize, hnswlib::HierarchicalNSW<float> &appr_alg,
+                           size_t vecdim, std::vector<std::unordered_set<hnswlib::labeltype>> &answers, size_t k) {
     std::vector<size_t> efs = {1};
     for (int i = k; i < 30; i++) {
         efs.push_back(i);
     }
-    for (int i = 30; i < 400; i+=10) {
+    for (int i = 30; i < 400; i += 10) {
         efs.push_back(i);
     }
     for (int i = 1000; i < 100000; i += 5000) {
@@ -156,13 +145,15 @@ test_vs_recall(
 
         float recall = test_approx<float>(queries, qsize, appr_alg, vecdim, answers, k);
         float time_us_per_query = stopw.getElapsedTimeMicro() / qsize;
-        float distance_comp_per_query =  appr_alg.metric_distance_computations / (1.0f * qsize);
-        float hops_per_query =  appr_alg.metric_hops / (1.0f * qsize);
+        float distance_comp_per_query = appr_alg.metric_distance_computations / (1.0f * qsize);
+        float hops_per_query = appr_alg.metric_hops / (1.0f * qsize);
 
-        std::cout << ef << "\t" << recall << "\t" << time_us_per_query << "us \t" << hops_per_query << "\t" << distance_comp_per_query << "\n";
+        std::cout << ef << "\t" << recall << "\t" << time_us_per_query << "us \t" << hops_per_query << "\t"
+                  << distance_comp_per_query << "\n";
         if (recall > 0.99) {
             test_passed = true;
-            std::cout << "Recall is over 0.99! " << recall << "\t" << time_us_per_query << "us \t" << hops_per_query << "\t" << distance_comp_per_query << "\n";
+            std::cout << "Recall is over 0.99! " << recall << "\t" << time_us_per_query << "us \t" << hops_per_query
+                      << "\t" << distance_comp_per_query << "\n";
             break;
         }
     }
@@ -226,14 +217,12 @@ int main(int argc, char **argv) {
     if (update) {
         std::cout << "Update iteration 0\n";
 
-        ParallelFor(1, N, num_threads, [&](size_t i, size_t threadId) {
-            appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i);
-        });
+        ParallelFor(1, N, num_threads,
+                    [&](size_t i, size_t threadId) { appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i); });
         appr_alg.checkIntegrity();
 
-        ParallelFor(1, N, num_threads, [&](size_t i, size_t threadId) {
-            appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i);
-        });
+        ParallelFor(1, N, num_threads,
+                    [&](size_t i, size_t threadId) { appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i); });
         appr_alg.checkIntegrity();
 
         for (int b = 1; b < dummy_data_multiplier; b++) {
@@ -242,9 +231,8 @@ int main(int argc, char **argv) {
             snprintf(cpath, sizeof(cpath), "batch_dummy_%02d.bin", b);
             std::vector<float> dummy_batchb = load_batch<float>(path + cpath, N * d);
 
-            ParallelFor(0, N, num_threads, [&](size_t i, size_t threadId) {
-                appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i);
-            });
+            ParallelFor(0, N, num_threads,
+                        [&](size_t i, size_t threadId) { appr_alg.addPoint((void *)(dummy_batch.data() + i * d), i); });
             appr_alg.checkIntegrity();
         }
     }
@@ -253,10 +241,9 @@ int main(int argc, char **argv) {
     std::vector<float> final_batch = load_batch<float>(path + "batch_final.bin", N * d);
 
     stopw.reset();
-    ParallelFor(0, N, num_threads, [&](size_t i, size_t threadId) {
-                    appr_alg.addPoint((void *)(final_batch.data() + i * d), i);
-                });
-    std::cout << "Finished. Time taken:" << stopw.getElapsedTimeMicro()*1e-6 << " s\n";
+    ParallelFor(0, N, num_threads,
+                [&](size_t i, size_t threadId) { appr_alg.addPoint((void *)(final_batch.data() + i * d), i); });
+    std::cout << "Finished. Time taken:" << stopw.getElapsedTimeMicro() * 1e-6 << " s\n";
     std::cout << "Running tests\n";
     std::vector<float> queries_batch = load_batch<float>(path + "queries.bin", N_queries * d);
 

@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from sys import platform
 from pydriller import Repository
 
 

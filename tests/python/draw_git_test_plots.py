@@ -20,7 +20,6 @@ def plot_data_from_file(file_path):
         axes = [axes]
     
     for i, ax in enumerate(axes):
-        idx=0
         ax.scatter(np.asarray(data.index,dtype=np.int64)%rep_size, data[i], label=f'Column {i+1}')
         ax.set_title(f'Column {i+1}')
         ax.set_xlabel('ID Number')

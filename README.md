@@ -325,10 +325,14 @@ Contributions are highly welcome!
 
 Please make pull requests against the `main` branch.
 
-When making changes please run tests (and please add a test to `tests/python` in case there is new functionality):
+Python tooling is managed with [uv](https://docs.astral.sh/uv/):
 ```bash
-python -m unittest discover --start-directory tests/python --pattern "bindings_test*.py"
+uv sync                                  # builds the extension and installs dev tools into .venv
+uv run pytest tests/python               # run the test suite
+uv run ruff check .                      # lint
 ```
+
+When making changes please run tests (and please add a test to `tests/python` in case there is new functionality). After editing C++ sources, rebuild with `uv sync --reinstall-package hnswlib`.
 
 
 ### Other implementations

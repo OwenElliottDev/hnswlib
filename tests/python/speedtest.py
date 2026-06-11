@@ -1,6 +1,5 @@
 import hnswlib
 import numpy as np
-import os.path
 import time
 import argparse
 

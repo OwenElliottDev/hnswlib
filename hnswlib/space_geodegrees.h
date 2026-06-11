@@ -11,10 +11,9 @@ namespace hnswlib {
 static const float GEO_DEG_TO_RAD = 0.017453292519943295f;  // pi / 180
 static const float GEO_EARTH_MEAN_RADIUS_KM = 6371.0088f;
 
-static float
-GeoDegreesDistance(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
-    const float *pVect1 = (const float *) pVect1v;
-    const float *pVect2 = (const float *) pVect2v;
+static float GeoDegreesDistance(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    const float *pVect1 = (const float *)pVect1v;
+    const float *pVect2 = (const float *)pVect2v;
 
     float lat1 = pVect1[0] * GEO_DEG_TO_RAD;
     float lon1 = pVect1[1] * GEO_DEG_TO_RAD;
@@ -45,17 +44,11 @@ class GeoDegreesSpace : public SpaceInterface<float> {
         data_size_ = dim * sizeof(float);
     }
 
-    size_t get_data_size() {
-        return data_size_;
-    }
+    size_t get_data_size() { return data_size_; }
 
-    DISTFUNC<float> get_dist_func() {
-        return fstdistfunc_;
-    }
+    DISTFUNC<float> get_dist_func() { return fstdistfunc_; }
 
-    void *get_dist_func_param() {
-        return &dim_;
-    }
+    void *get_dist_func_param() { return &dim_; }
 
     ~GeoDegreesSpace() {}
 };
