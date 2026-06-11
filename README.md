@@ -91,6 +91,8 @@ labels, distances = p.knn_query(queries, k=10, rerank_size=1000)  # scan at 64 d
 
 * `unmark_deleted(label)`  - unmarks the element as deleted, so it will be not be omitted from search results.
 
+* `remove_item(label)` - removes the element from the index and repairs the graph around it (delete-and-reconnect): the element is unlinked from its neighbors at every level and the orphaned neighbors are reconnected to each other. Unlike `mark_deleted`, query throughput does not degrade as deletions accumulate. The label is released immediately and cannot be `unmark_deleted`. The storage slot is reused by `add_items(..., replace_deleted=True)` when the index was created with `allow_replace_deleted=True`. Not thread-safe with `add_items` or `knn_query`.
+
 * `resize_index(new_size)` - changes the maximum capacity of the index. Not thread safe with `add_items` and `knn_query`.
 
 * `set_ef(ef)` - sets the query time accuracy/speed trade-off, defined by the `ef` parameter (
