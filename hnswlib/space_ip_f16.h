@@ -302,6 +302,29 @@ InnerProductF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const voi
 
     const uint16_t *pEnd1 = pVect1 + (qty16 << 4);
 
+#if defined(__ARM_FEATURE_FP16_FML)
+    // widening f16 multiply-accumulate: products are computed exactly in f32
+    // without explicit convert instructions
+    float32x4_t sum0 = vdupq_n_f32(0);
+    float32x4_t sum1 = vdupq_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        float16x8_t h1 = vreinterpretq_f16_u16(vld1q_u16(pVect1));
+        float16x8_t h2 = vreinterpretq_f16_u16(vld1q_u16(pVect2));
+        sum0 = vfmlalq_low_f16(sum0, h1, h2);
+        sum1 = vfmlalq_high_f16(sum1, h1, h2);
+
+        h1 = vreinterpretq_f16_u16(vld1q_u16(pVect1 + 8));
+        h2 = vreinterpretq_f16_u16(vld1q_u16(pVect2 + 8));
+        sum0 = vfmlalq_low_f16(sum0, h1, h2);
+        sum1 = vfmlalq_high_f16(sum1, h1, h2);
+
+        pVect1 += 16;
+        pVect2 += 16;
+    }
+
+    return vaddvq_f32(vaddq_f32(sum0, sum1));
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -322,6 +345,7 @@ InnerProductF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const voi
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float
@@ -338,6 +362,21 @@ InnerProductF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void
 
     const uint16_t *pEnd1 = pVect1 + (qty4 << 2);
 
+#if defined(__ARM_FEATURE_FP16_FML)
+    float32x2_t sum = vdup_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        float16x4_t h1 = vreinterpret_f16_u16(vld1_u16(pVect1));
+        float16x4_t h2 = vreinterpret_f16_u16(vld1_u16(pVect2));
+        sum = vfmlal_low_f16(sum, h1, h2);
+        sum = vfmlal_high_f16(sum, h1, h2);
+
+        pVect1 += 4;
+        pVect2 += 4;
+    }
+
+    return vaddv_f32(sum);
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -350,6 +389,7 @@ InnerProductF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float

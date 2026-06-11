@@ -295,6 +295,26 @@ InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const vo
 
     const uint16_t *pEnd1 = pVect1 + (qty16 << 4);
 
+#if defined(__ARM_FEATURE_BF16_VECTOR_ARITHMETIC)
+    // native bf16 dot product: each BFDOT consumes 8 bf16 lanes and
+    // accumulates pairwise products into 4 f32 lanes, no explicit widening
+    float32x4_t sum0 = vdupq_n_f32(0);
+    float32x4_t sum1 = vdupq_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        sum0 = vbfdotq_f32(sum0,
+                           vreinterpretq_bf16_u16(vld1q_u16(pVect1)),
+                           vreinterpretq_bf16_u16(vld1q_u16(pVect2)));
+        sum1 = vbfdotq_f32(sum1,
+                           vreinterpretq_bf16_u16(vld1q_u16(pVect1 + 8)),
+                           vreinterpretq_bf16_u16(vld1q_u16(pVect2 + 8)));
+
+        pVect1 += 16;
+        pVect2 += 16;
+    }
+
+    return vaddvq_f32(vaddq_f32(sum0, sum1));
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -325,6 +345,7 @@ InnerProductBF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const vo
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float
@@ -341,6 +362,20 @@ InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const voi
 
     const uint16_t *pEnd1 = pVect1 + (qty4 << 2);
 
+#if defined(__ARM_FEATURE_BF16_VECTOR_ARITHMETIC)
+    float32x2_t sum = vdup_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        sum = vbfdot_f32(sum,
+                         vreinterpret_bf16_u16(vld1_u16(pVect1)),
+                         vreinterpret_bf16_u16(vld1_u16(pVect2)));
+
+        pVect1 += 4;
+        pVect2 += 4;
+    }
+
+    return vaddv_f32(sum);
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -353,6 +388,7 @@ InnerProductBF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const voi
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float

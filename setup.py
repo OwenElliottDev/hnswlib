@@ -58,6 +58,20 @@ def has_flag(compiler, flagname):
     return True
 
 
+def host_supports_arm_bf16():
+    """Return True when the build host is an Apple Silicon Mac whose CPU
+    supports the bf16 vector instructions (M2 and later)."""
+    if sys.platform != 'darwin' or platform.machine() != 'arm64':
+        return False
+    try:
+        import subprocess
+        out = subprocess.run(['sysctl', '-n', 'hw.optional.arm.FEAT_BF16'],
+                             capture_output=True, text=True)
+        return out.stdout.strip() == '1'
+    except Exception:
+        return False
+
+
 def cpp_flag(compiler):
     """Return the -std=c++[11/14] compiler flag.
     The c++14 is prefered over c++11 (when it is available).
@@ -109,12 +123,19 @@ class BuildExt(build_ext):
                     opts.remove(BuildExt.compiler_flag_native)
                     # for macos add apple-m1 flag if it's available
                     if sys.platform == 'darwin':
-                        m1_flag = '-mcpu=apple-m1'
-                        print('checking avalability of flag:', m1_flag)
-                        if has_flag(self.compiler, m1_flag):
-                            print('adding flag:', m1_flag)
-                            opts.append(m1_flag)
-                        else:
+                        candidate_flags = []
+                        # apple-m1 is the universal-binary-safe baseline but
+                        # predates bf16; add it when the host CPU has it so
+                        # the native bf16 kernels are compiled in
+                        if host_supports_arm_bf16():
+                            candidate_flags.append('-mcpu=apple-m1+bf16')
+                        candidate_flags.append('-mcpu=apple-m1')
+                        for m1_flag in candidate_flags:
+                            print('checking avalability of flag:', m1_flag)
+                            if has_flag(self.compiler, m1_flag):
+                                print('adding flag:', m1_flag)
+                                opts.append(m1_flag)
+                                break
                             print(f'flag: {m1_flag} is not available')
                 else:
                     print(f'flag: {BuildExt.compiler_flag_native} is available')
