@@ -1,7 +1,7 @@
 # Hnswlib - fast approximate nearest neighbor search
 Header-only C++ HNSW implementation with python bindings, insertions and updates.
 
-This fork extends [nmslib/hnswlib](https://github.com/nmslib/hnswlib) with reduced-precision storage (f16/bf16), ARM NEON SIMD, Matryoshka (MRL) two-phase search, true deletions with graph repair, a geographic distance, and a benchmark harness.
+This fork extends [nmslib/hnswlib](https://github.com/nmslib/hnswlib). It is used in [hnswlib_server](https://github.com/OwenElliottDev/hnswlib_server).
 
 **NEWS:**
 
