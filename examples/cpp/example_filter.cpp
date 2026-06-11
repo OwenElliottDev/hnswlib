@@ -2,15 +2,12 @@
 
 
 // Filter that allows labels divisible by divisor
-class PickDivisibleIds: public hnswlib::BaseFilterFunctor {
-unsigned int divisor = 1;
+class PickDivisibleIds : public hnswlib::BaseFilterFunctor {
+    unsigned int divisor = 1;
+
  public:
-    PickDivisibleIds(unsigned int divisor): divisor(divisor) {
-        assert(divisor != 0);
-    }
-    bool operator()(hnswlib::labeltype label_id) {
-        return label_id % divisor == 0;
-    }
+    PickDivisibleIds(unsigned int divisor) : divisor(divisor) { assert(divisor != 0); }
+    bool operator()(hnswlib::labeltype label_id) { return label_id % divisor == 0; }
 };
 
 
@@ -23,7 +20,8 @@ int main() {
 
     // Initing index
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<float>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -45,9 +43,11 @@ int main() {
     // Query the elements for themselves with filter and check returned labels
     int k = 10;
     for (int i = 0; i < max_elements; i++) {
-        std::vector<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnnCloserFirst(data + i * dim, k, &pickIdsDivisibleByTwo);
-        for (auto item: result) {
-            if (item.second % 2 == 1) std::cout << "Error: found odd label\n";
+        std::vector<std::pair<float, hnswlib::labeltype>> result =
+            alg_hnsw->searchKnnCloserFirst(data + i * dim, k, &pickIdsDivisibleByTwo);
+        for (auto item : result) {
+            if (item.second % 2 == 1)
+                std::cout << "Error: found odd label\n";
         }
     }
 

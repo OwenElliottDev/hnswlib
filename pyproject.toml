@@ -7,3 +7,30 @@ requires = [
 ]
 
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "hnswlib"
+description = "Header-only C++ HNSW implementation with python bindings"
+requires-python = ">=3.13"
+dependencies = ["numpy"]
+dynamic = ["version"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+# E741: upstream tests use single-letter loop variables throughout;
+# E731: small lambdas assigned to names are used deliberately in tests/bench
+ignore = ["E741", "E731"]
+
+[tool.setuptools]
+# the package is a single compiled extension module (ext_modules in setup.py);
+# disable automatic package discovery
+packages = []

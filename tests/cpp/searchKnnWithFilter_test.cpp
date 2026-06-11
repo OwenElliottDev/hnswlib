@@ -11,22 +11,17 @@ namespace {
 
 using idx_t = hnswlib::labeltype;
 
-class PickDivisibleIds: public hnswlib::BaseFilterFunctor {
-unsigned int divisor = 1;
+class PickDivisibleIds : public hnswlib::BaseFilterFunctor {
+    unsigned int divisor = 1;
+
  public:
-    PickDivisibleIds(unsigned int divisor): divisor(divisor) {
-        assert(divisor != 0);
-    }
-    bool operator()(idx_t label_id) {
-        return label_id % divisor == 0;
-    }
+    PickDivisibleIds(unsigned int divisor) : divisor(divisor) { assert(divisor != 0); }
+    bool operator()(idx_t label_id) { return label_id % divisor == 0; }
 };
 
-class PickNothing: public hnswlib::BaseFilterFunctor {
+class PickNothing : public hnswlib::BaseFilterFunctor {
  public:
-    bool operator()(idx_t label_id) {
-        return false;
-    }
+    bool operator()(idx_t label_id) { return false; }
 };
 
 void test_some_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t div_num, size_t label_id_start) {
@@ -50,7 +45,7 @@ void test_some_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t div_num
     }
 
     hnswlib::L2Space space(d);
-    hnswlib::AlgorithmInterface<float>* alg_brute  = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
+    hnswlib::AlgorithmInterface<float>* alg_brute = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
     hnswlib::AlgorithmInterface<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n);
 
     for (size_t i = 0; i < n; ++i) {
@@ -112,7 +107,7 @@ void test_none_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t label_i
     }
 
     hnswlib::L2Space space(d);
-    hnswlib::AlgorithmInterface<float>* alg_brute  = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
+    hnswlib::AlgorithmInterface<float>* alg_brute = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
     hnswlib::AlgorithmInterface<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n);
 
     for (size_t i = 0; i < n; ++i) {
@@ -145,15 +140,13 @@ void test_none_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t label_i
 
 }  // namespace
 
-class CustomFilterFunctor: public hnswlib::BaseFilterFunctor {
+class CustomFilterFunctor : public hnswlib::BaseFilterFunctor {
     std::unordered_set<idx_t> allowed_values;
 
  public:
     explicit CustomFilterFunctor(const std::unordered_set<idx_t>& values) : allowed_values(values) {}
 
-    bool operator()(idx_t id) {
-        return allowed_values.count(id) != 0;
-    }
+    bool operator()(idx_t id) { return allowed_values.count(id) != 0; }
 };
 
 int main() {

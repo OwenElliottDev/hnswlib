@@ -11,15 +11,16 @@ int main() {
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     int num_queries = 5;
-    int num_docs = 5;           // Number of documents to search
-    int ef_collection = 6;      // Number of candidate documents during the search
-                                // Controlls the recall: higher ef leads to better accuracy, but slower search
+    int num_docs = 5;       // Number of documents to search
+    int ef_collection = 6;  // Number of candidate documents during the search
+                            // Controlls the recall: higher ef leads to better accuracy, but slower search
     docidtype min_doc_id = 0;
     docidtype max_doc_id = 9;
 
     // Initing index
     hnswlib::MultiVectorL2Space<docidtype> space(dim);
-    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw = new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -63,12 +64,12 @@ int main() {
         }
         std::cout << "Query #" << i << "\n";
         hnswlib::MultiVectorSearchStopCondition<docidtype, dist_t> stop_condition(space, num_docs, ef_collection);
-        std::vector<std::pair<float, hnswlib::labeltype>> result = 
+        std::vector<std::pair<float, hnswlib::labeltype>> result =
             alg_hnsw->searchStopConditionClosest(query_data, stop_condition);
         size_t num_vectors = result.size();
 
         std::unordered_map<docidtype, size_t> doc_counter;
-        for (auto pair: result) {
+        for (auto pair : result) {
             hnswlib::labeltype label = pair.second;
             docidtype doc_id = label_docid_lookup[label];
             doc_counter[doc_id] += 1;

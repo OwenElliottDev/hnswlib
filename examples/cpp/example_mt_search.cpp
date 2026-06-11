@@ -5,7 +5,7 @@
 // Multithreaded executor
 // The helper function copied from python_bindings/bindings.cpp (and that itself is copied from nmslib)
 // An alternative is using #pragme omp parallel for or any other C++ threading
-template<class Function>
+template <class Function>
 inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn) {
     if (numThreads <= 0) {
         numThreads = std::thread::hardware_concurrency();
@@ -50,7 +50,7 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
                 }
             }));
         }
-        for (auto &thread : threads) {
+        for (auto& thread : threads) {
             thread.join();
         }
         if (lastException) {
@@ -70,7 +70,8 @@ int main() {
 
     // Initing index
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<float>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -82,9 +83,8 @@ int main() {
     }
 
     // Add data to index
-    ParallelFor(0, max_elements, num_threads, [&](size_t row, size_t threadId) {
-        alg_hnsw->addPoint((void*)(data + dim * row), row);
-    });
+    ParallelFor(0, max_elements, num_threads,
+                [&](size_t row, size_t threadId) { alg_hnsw->addPoint((void*)(data + dim * row), row); });
 
     // Query the elements for themselves and measure recall
     std::vector<hnswlib::labeltype> neighbors(max_elements);
@@ -96,7 +96,8 @@ int main() {
     float correct = 0;
     for (int i = 0; i < max_elements; i++) {
         hnswlib::labeltype label = neighbors[i];
-        if (label == i) correct++;
+        if (label == i)
+            correct++;
     }
     float recall = correct / max_elements;
     std::cout << "Recall: " << recall << "\n";

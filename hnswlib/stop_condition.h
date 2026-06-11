@@ -6,7 +6,7 @@
 
 namespace hnswlib {
 
-template<typename DOCIDTYPE>
+template <typename DOCIDTYPE>
 class BaseMultiVectorSpace : public SpaceInterface<float> {
  public:
     virtual DOCIDTYPE get_doc_id(const void *datapoint) = 0;
@@ -15,7 +15,7 @@ class BaseMultiVectorSpace : public SpaceInterface<float> {
 };
 
 
-template<typename DOCIDTYPE>
+template <typename DOCIDTYPE>
 class MultiVectorL2Space : public BaseMultiVectorSpace<DOCIDTYPE> {
     DISTFUNC<float> fstdistfunc_;
     size_t data_size_;
@@ -26,15 +26,15 @@ class MultiVectorL2Space : public BaseMultiVectorSpace<DOCIDTYPE> {
     MultiVectorL2Space(size_t dim) {
         fstdistfunc_ = L2Sqr;
 #if defined(USE_SSE) || defined(USE_AVX) || defined(USE_AVX512)
-    #if defined(USE_AVX512)
+#if defined(USE_AVX512)
         if (AVX512Capable())
             L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX512;
         else if (AVXCapable())
             L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX;
-    #elif defined(USE_AVX)
+#elif defined(USE_AVX)
         if (AVXCapable())
             L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX;
-    #endif
+#endif
 
         if (dim % 16 == 0)
             fstdistfunc_ = L2SqrSIMD16Ext;
@@ -50,31 +50,23 @@ class MultiVectorL2Space : public BaseMultiVectorSpace<DOCIDTYPE> {
         data_size_ = vector_size_ + sizeof(DOCIDTYPE);
     }
 
-    size_t get_data_size() override {
-        return data_size_;
-    }
+    size_t get_data_size() override { return data_size_; }
 
-    DISTFUNC<float> get_dist_func() override {
-        return fstdistfunc_;
-    }
+    DISTFUNC<float> get_dist_func() override { return fstdistfunc_; }
 
-    void *get_dist_func_param() override {
-        return &dim_;
-    }
+    void *get_dist_func_param() override { return &dim_; }
 
-    DOCIDTYPE get_doc_id(const void *datapoint) override {
-        return *(DOCIDTYPE *)((char *)datapoint + vector_size_);
-    }
+    DOCIDTYPE get_doc_id(const void *datapoint) override { return *(DOCIDTYPE *)((char *)datapoint + vector_size_); }
 
     void set_doc_id(void *datapoint, DOCIDTYPE doc_id) override {
-        *(DOCIDTYPE*)((char *)datapoint + vector_size_) = doc_id;
+        *(DOCIDTYPE *)((char *)datapoint + vector_size_) = doc_id;
     }
 
     ~MultiVectorL2Space() {}
 };
 
 
-template<typename DOCIDTYPE>
+template <typename DOCIDTYPE>
 class MultiVectorInnerProductSpace : public BaseMultiVectorSpace<DOCIDTYPE> {
     DISTFUNC<float> fstdistfunc_;
     size_t data_size_;
@@ -85,7 +77,7 @@ class MultiVectorInnerProductSpace : public BaseMultiVectorSpace<DOCIDTYPE> {
     MultiVectorInnerProductSpace(size_t dim) {
         fstdistfunc_ = InnerProductDistance;
 #if defined(USE_AVX) || defined(USE_SSE) || defined(USE_AVX512)
-    #if defined(USE_AVX512)
+#if defined(USE_AVX512)
         if (AVX512Capable()) {
             InnerProductSIMD16Ext = InnerProductSIMD16ExtAVX512;
             InnerProductDistanceSIMD16Ext = InnerProductDistanceSIMD16ExtAVX512;
@@ -93,18 +85,18 @@ class MultiVectorInnerProductSpace : public BaseMultiVectorSpace<DOCIDTYPE> {
             InnerProductSIMD16Ext = InnerProductSIMD16ExtAVX;
             InnerProductDistanceSIMD16Ext = InnerProductDistanceSIMD16ExtAVX;
         }
-    #elif defined(USE_AVX)
+#elif defined(USE_AVX)
         if (AVXCapable()) {
             InnerProductSIMD16Ext = InnerProductSIMD16ExtAVX;
             InnerProductDistanceSIMD16Ext = InnerProductDistanceSIMD16ExtAVX;
         }
-    #endif
-    #if defined(USE_AVX)
+#endif
+#if defined(USE_AVX)
         if (AVXCapable()) {
             InnerProductSIMD4Ext = InnerProductSIMD4ExtAVX;
             InnerProductDistanceSIMD4Ext = InnerProductDistanceSIMD4ExtAVX;
         }
-    #endif
+#endif
 
         if (dim % 16 == 0)
             fstdistfunc_ = InnerProductDistanceSIMD16Ext;
@@ -119,49 +111,39 @@ class MultiVectorInnerProductSpace : public BaseMultiVectorSpace<DOCIDTYPE> {
         data_size_ = vector_size_ + sizeof(DOCIDTYPE);
     }
 
-    size_t get_data_size() override {
-        return data_size_;
-    }
+    size_t get_data_size() override { return data_size_; }
 
-    DISTFUNC<float> get_dist_func() override {
-        return fstdistfunc_;
-    }
+    DISTFUNC<float> get_dist_func() override { return fstdistfunc_; }
 
-    void *get_dist_func_param() override {
-        return &dim_;
-    }
+    void *get_dist_func_param() override { return &dim_; }
 
-    DOCIDTYPE get_doc_id(const void *datapoint) override {
-        return *(DOCIDTYPE *)((char *)datapoint + vector_size_);
-    }
+    DOCIDTYPE get_doc_id(const void *datapoint) override { return *(DOCIDTYPE *)((char *)datapoint + vector_size_); }
 
     void set_doc_id(void *datapoint, DOCIDTYPE doc_id) override {
-        *(DOCIDTYPE*)((char *)datapoint + vector_size_) = doc_id;
+        *(DOCIDTYPE *)((char *)datapoint + vector_size_) = doc_id;
     }
 
     ~MultiVectorInnerProductSpace() {}
 };
 
 
-template<typename DOCIDTYPE, typename dist_t>
+template <typename DOCIDTYPE, typename dist_t>
 class MultiVectorSearchStopCondition : public BaseSearchStopCondition<dist_t> {
     size_t curr_num_docs_;
     size_t num_docs_to_search_;
     size_t ef_collection_;
     std::unordered_map<DOCIDTYPE, size_t> doc_counter_;
     std::priority_queue<std::pair<dist_t, DOCIDTYPE>> search_results_;
-    BaseMultiVectorSpace<DOCIDTYPE>& space_;
+    BaseMultiVectorSpace<DOCIDTYPE> &space_;
 
  public:
-    MultiVectorSearchStopCondition(
-        BaseMultiVectorSpace<DOCIDTYPE>& space,
-        size_t num_docs_to_search,
-        size_t ef_collection = 10)
+    MultiVectorSearchStopCondition(BaseMultiVectorSpace<DOCIDTYPE> &space, size_t num_docs_to_search,
+                                   size_t ef_collection = 10)
         : space_(space) {
-            curr_num_docs_ = 0;
-            num_docs_to_search_ = num_docs_to_search;
-            ef_collection_ = std::max(ef_collection, num_docs_to_search);
-        }
+        curr_num_docs_ = 0;
+        num_docs_to_search_ = num_docs_to_search;
+        ef_collection_ = std::max(ef_collection, num_docs_to_search);
+    }
 
     void add_point_to_result(labeltype label, const void *datapoint, dist_t dist) override {
         DOCIDTYPE doc_id = space_.get_doc_id(datapoint);
@@ -196,7 +178,7 @@ class MultiVectorSearchStopCondition : public BaseSearchStopCondition<dist_t> {
         return flag_remove_extra;
     }
 
-    void filter_results(std::vector<std::pair<dist_t, labeltype >> &candidates) override {
+    void filter_results(std::vector<std::pair<dist_t, labeltype>> &candidates) override {
         while (curr_num_docs_ > num_docs_to_search_) {
             dist_t dist_cand = candidates.back().first;
             dist_t dist_res = search_results_.top().first;
@@ -215,7 +197,7 @@ class MultiVectorSearchStopCondition : public BaseSearchStopCondition<dist_t> {
 };
 
 
-template<typename dist_t>
+template <typename dist_t>
 class EpsilonSearchStopCondition : public BaseSearchStopCondition<dist_t> {
     float epsilon_;
     size_t min_num_candidates_;
@@ -231,9 +213,7 @@ class EpsilonSearchStopCondition : public BaseSearchStopCondition<dist_t> {
         curr_num_items_ = 0;
     }
 
-    void add_point_to_result(labeltype label, const void *datapoint, dist_t dist) override {
-        curr_num_items_ += 1;
-    }
+    void add_point_to_result(labeltype label, const void *datapoint, dist_t dist) override { curr_num_items_ += 1; }
 
     void remove_point_from_result(labeltype label, const void *datapoint, dist_t dist) override {
         curr_num_items_ -= 1;
@@ -262,7 +242,7 @@ class EpsilonSearchStopCondition : public BaseSearchStopCondition<dist_t> {
         return flag_remove_extra;
     }
 
-    void filter_results(std::vector<std::pair<dist_t, labeltype >> &candidates) override {
+    void filter_results(std::vector<std::pair<dist_t, labeltype>> &candidates) override {
         while (!candidates.empty() && candidates.back().first > epsilon_) {
             candidates.pop_back();
         }

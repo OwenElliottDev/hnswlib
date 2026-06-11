@@ -10,7 +10,8 @@ int main() {
 
     // Initing index
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<float>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -31,7 +32,8 @@ int main() {
     for (int i = 0; i < max_elements; i++) {
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
-        if (label == i) correct++;
+        if (label == i)
+            correct++;
     }
     float recall = correct / max_elements;
     std::cout << "Recall: " << recall << "\n";
@@ -47,7 +49,8 @@ int main() {
     for (int i = 0; i < max_elements; i++) {
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
-        if (label == i) correct++;
+        if (label == i)
+            correct++;
     }
     recall = (float)correct / max_elements;
     std::cout << "Recall of deserialized index: " << recall << "\n";

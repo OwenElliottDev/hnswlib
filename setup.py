@@ -149,15 +149,11 @@ class BuildExt(build_ext):
         build_ext.build_extensions(self)
 
 
+# static metadata lives in pyproject.toml; only the version (dynamic) and
+# the extension build remain here
 setup(
-    name='hnswlib',
     version=__version__,
-    description='hnswlib',
-    author='Yury Malkov and others',
-    url='https://github.com/yurymalkov/hnsw',
-    long_description="""hnsw""",
     ext_modules=ext_modules,
-    install_requires=['numpy'],
     cmdclass={'build_ext': BuildExt},
     zip_safe=False,
 )
