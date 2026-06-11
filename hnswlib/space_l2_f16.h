@@ -271,6 +271,29 @@ L2SqrF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_
 
     const uint16_t *pEnd1 = pVect1 + (qty16 << 4);
 
+#if defined(__ARM_FEATURE_FP16_FML) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+    // subtract in f16 (at most 0.5 ulp rounding on the difference), then
+    // square-accumulate with widening f16 multiply-add directly into f32
+    float32x4_t sum0 = vdupq_n_f32(0);
+    float32x4_t sum1 = vdupq_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        float16x8_t d = vsubq_f16(vreinterpretq_f16_u16(vld1q_u16(pVect1)),
+                                  vreinterpretq_f16_u16(vld1q_u16(pVect2)));
+        sum0 = vfmlalq_low_f16(sum0, d, d);
+        sum1 = vfmlalq_high_f16(sum1, d, d);
+
+        d = vsubq_f16(vreinterpretq_f16_u16(vld1q_u16(pVect1 + 8)),
+                      vreinterpretq_f16_u16(vld1q_u16(pVect2 + 8)));
+        sum0 = vfmlalq_low_f16(sum0, d, d);
+        sum1 = vfmlalq_high_f16(sum1, d, d);
+
+        pVect1 += 16;
+        pVect2 += 16;
+    }
+
+    return vaddvq_f32(vaddq_f32(sum0, sum1));
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -305,6 +328,7 @@ L2SqrF16SIMD16ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float
@@ -316,6 +340,21 @@ L2SqrF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_p
 
     const uint16_t *pEnd1 = pVect1 + (qty4 << 2);
 
+#if defined(__ARM_FEATURE_FP16_FML) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+    float32x2_t sum = vdup_n_f32(0);
+
+    while (pVect1 < pEnd1) {
+        float16x4_t d = vsub_f16(vreinterpret_f16_u16(vld1_u16(pVect1)),
+                                 vreinterpret_f16_u16(vld1_u16(pVect2)));
+        sum = vfmlal_low_f16(sum, d, d);
+        sum = vfmlal_high_f16(sum, d, d);
+
+        pVect1 += 4;
+        pVect2 += 4;
+    }
+
+    return vaddv_f32(sum);
+#else
     float32x4_t sum = vdupq_n_f32(0);
 
     while (pVect1 < pEnd1) {
@@ -329,6 +368,7 @@ L2SqrF16SIMD4ExtNEON(const void *pVect1v, const void *pVect2v, const void *qty_p
     }
 
     return vaddvq_f32(sum);
+#endif
 }
 
 static float
