@@ -1,7 +1,21 @@
 # Hnswlib - fast approximate nearest neighbor search
 Header-only C++ HNSW implementation with python bindings, insertions and updates.
 
+This fork extends [nmslib/hnswlib](https://github.com/nmslib/hnswlib) with reduced-precision storage (f16/bf16), ARM NEON SIMD, Matryoshka (MRL) two-phase search, true deletions with graph repair, a geographic distance, and a benchmark harness.
+
 **NEWS:**
+
+**version 0.10.0** (this fork)
+
+* Half-precision storage spaces: `l2_f16`, `ip_f16`, `cosine_f16` (IEEE fp16) and `l2_bf16`, `ip_bf16`, `cosine_bf16` (bfloat16) — half the memory of float32, with float32 input/output at the API
+* ARM NEON SIMD for all float32 spaces, plus native fp16 (`FMLAL`) and bf16 (`BFDOT`) arithmetic on CPUs that support it (Apple Silicon, Graviton 3+)
+* Matryoshka (MRL) support: build and scan the graph at a prefix of the dimensions (`mrl_scan_dim`), rerank at full dimensionality (`knn_query(..., rerank_size=N)`)
+* True deletion with graph repair: `remove_item(label)` unlinks the element and reconnects its neighborhood, so query throughput does not degrade as deletions accumulate (unlike `mark_deleted` tombstones)
+* New `geodegrees` space: great-circle distance in km over (latitude, longitude) in degrees
+* Exact k-NN scan in C++ (`HierarchicalNSW::searchExactKnn`)
+* Fixed a use-after-free in `BruteforceSearch::removePoint` that silently corrupted results after deletions (bug exists upstream)
+* Benchmark harness (`bench/benchmark.py`) measuring recall, QPS, and memory for static and delete/insert churn workloads
+* CI: Linux x86_64 + arm64, Python 3.13+
 
 **version 0.9.0**
 
@@ -55,6 +69,17 @@ Description of the algorithm parameters can be found in [ALGO_PARAMS.md](ALGO_PA
 Note that inner product is not an actual metric. An element can be closer to some other element than to itself. That allows some speedup if you remove all elements that are not the closest to themselves from the index.
 
 For other spaces use the nmslib library https://github.com/nmslib/nmslib. 
+
+#### Reduced-precision storage (f16 / bf16)
+
+The l2, ip, and cosine metrics are also available with vectors stored at half precision, halving index memory. The Python API still takes and returns float32; conversion happens inside the index.
+
+| parameter | storage format | notes |
+|---|---|---|
+| `l2_f16`, `ip_f16`, `cosine_f16` | IEEE float16 | ~3 significant decimal digits; good default for normalized embeddings |
+| `l2_bf16`, `ip_bf16`, `cosine_bf16` | bfloat16 | float32 dynamic range, ~2 significant decimal digits |
+
+Distance kernels are SIMD-accelerated on x86 (SSE/AVX/AVX512+F16C) and ARM NEON, using native widening fp16 arithmetic (FMLAL) and the bf16 dot product (BFDOT) where the CPU supports them.
 
 #### Matryoshka (MRL) embeddings
 
@@ -123,7 +148,7 @@ labels, distances = p.knn_query(queries, k=10, rerank_size=1000)  # scan at 64 d
 
 Read-only properties of `hnswlib.Index` class:
 
-* `space` - name of the space (can be one of "l2", "ip", or "cosine"). 
+* `space` - name of the space (one of "l2", "ip", "cosine", their "_f16"/"_bf16" variants, or "geodegrees"). 
 
 * `dim`   - dimensionality of the space. 
 
@@ -267,24 +292,38 @@ print("Recall for two batches:", np.mean(labels.reshape(-1) == np.arange(len(dat
 * epsilon search
 
 
+### Benchmarking
+
+`bench/benchmark.py` measures recall, QPS, and memory:
+
+```bash
+# recall@k / QPS sweep over ef on a fixed index (add --mrl-scan-dim / --rerank-size for MRL)
+python3 bench/benchmark.py static --space l2 --dim 128 --num-elements 100000 --ef 10 20 50 100 200
+
+# sliding-window delete/insert/query traffic: recall drift, write and query
+# throughput, memory growth; --delete-mode mark|remove, --no-refill for pure
+# deletion decay curves
+python3 bench/benchmark.py churn --space cosine --dim 128 --num-elements 50000 \
+    --rounds 20 --churn-fraction 0.05 --delete-mode remove --replace-deleted
+```
+
+Synthetic `gaussian`, `clustered`, and `matryoshka` datasets are built in; pass `--dataset path.npy` to benchmark your own vectors. `--json out.json` writes machine-readable results.
+
 ### Bindings installation
 
 You can install from sources:
 ```bash
-apt-get install -y python-setuptools python-pip
-git clone https://github.com/nmslib/hnswlib.git
+git clone https://github.com/OwenElliottDev/hnswlib.git
 cd hnswlib
 pip install .
 ```
 
-or you can install via pip:
-`pip install hnswlib`
-
+Note: the build compiles with `-march=native` (or the closest supported flag), so wheels are specific to the build host; set `HNSWLIB_NO_NATIVE=1` for portable builds.
 
 ### For developers 
 Contributions are highly welcome!
 
-Please make pull requests against the `develop` branch.
+Please make pull requests against the `main` branch.
 
 When making changes please run tests (and please add a test to `tests/python` in case there is new functionality):
 ```bash
