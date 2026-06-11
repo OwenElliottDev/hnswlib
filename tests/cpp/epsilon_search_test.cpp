@@ -12,15 +12,16 @@ int main() {
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     int num_queries = 100;
-    float epsilon2 = 1.0;                    // Squared distance to query
-    int max_num_candidates = max_elements;   // Upper bound on the number of returned elements in the epsilon region
-    int min_num_candidates = 2000;           // Minimum number of candidates to search in the epsilon region
-                                             // this parameter is similar to ef
+    float epsilon2 = 1.0;                   // Squared distance to query
+    int max_num_candidates = max_elements;  // Upper bound on the number of returned elements in the epsilon region
+    int min_num_candidates = 2000;          // Minimum number of candidates to search in the epsilon region
+                                            // this parameter is similar to ef
 
     // Initing index
     hnswlib::L2Space space(dim);
     hnswlib::BruteforceSearch<dist_t>* alg_brute = new hnswlib::BruteforceSearch<dist_t>(&space, max_elements);
-    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw = new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -51,19 +52,19 @@ int main() {
         hnswlib::EpsilonSearchStopCondition<dist_t> stop_condition(epsilon2, min_num_candidates, max_num_candidates);
         std::vector<std::pair<float, hnswlib::labeltype>> result_hnsw =
             alg_hnsw->searchStopConditionClosest(query_data, stop_condition);
-        
+
         // check that returned results are in epsilon region
         size_t num_vectors = result_hnsw.size();
         std::unordered_set<hnswlib::labeltype> hnsw_labels;
-        for (auto pair: result_hnsw) {
+        for (auto pair : result_hnsw) {
             float dist = pair.first;
             hnswlib::labeltype label = pair.second;
             hnsw_labels.insert(label);
-            assert(dist >=0 && dist <= epsilon2);
+            assert(dist >= 0 && dist <= epsilon2);
         }
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result_brute =
             alg_brute->searchKnn(query_data, max_elements);
-        
+
         // check recall
         std::unordered_set<hnswlib::labeltype> gt_labels;
         while (!result_brute.empty()) {
@@ -75,7 +76,7 @@ int main() {
             result_brute.pop();
         }
         float correct = 0;
-        for (const auto& hnsw_label: hnsw_labels) {
+        for (const auto& hnsw_label : hnsw_labels) {
             if (gt_labels.find(hnsw_label) != gt_labels.end()) {
                 correct += 1;
             }
@@ -94,8 +95,9 @@ int main() {
     float epsilon2_small = 0.0001f;
     int min_candidates_small = 500;
     for (size_t i = 0; i < max_elements; i++) {
-        hnswlib::EpsilonSearchStopCondition<dist_t> stop_condition(epsilon2_small, min_candidates_small, max_num_candidates);
-        std::vector<std::pair<float, hnswlib::labeltype>> result = 
+        hnswlib::EpsilonSearchStopCondition<dist_t> stop_condition(epsilon2_small, min_candidates_small,
+                                                                   max_num_candidates);
+        std::vector<std::pair<float, hnswlib::labeltype>> result =
             alg_hnsw->searchStopConditionClosest(alg_hnsw->getDataByInternalId(i), stop_condition);
         size_t num_vectors = result.size();
         // get closest distance

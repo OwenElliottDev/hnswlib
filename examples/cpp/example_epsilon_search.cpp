@@ -13,11 +13,12 @@ int main() {
                                    // this parameter is similar to ef
 
     int num_queries = 5;
-    float epsilon2 = 2.0;          // Squared distance to query
+    float epsilon2 = 2.0;  // Squared distance to query
 
     // Initing index
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw = new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<dist_t>* alg_hnsw =
+        new hnswlib::HierarchicalNSW<dist_t>(&space, max_elements, M, ef_construction);
 
     // Generate random data
     std::mt19937 rng;
@@ -53,7 +54,7 @@ int main() {
         }
         std::cout << "Query #" << i << "\n";
         hnswlib::EpsilonSearchStopCondition<dist_t> stop_condition(epsilon2, min_num_candidates, max_elements);
-        std::vector<std::pair<float, hnswlib::labeltype>> result = 
+        std::vector<std::pair<float, hnswlib::labeltype>> result =
             alg_hnsw->searchStopConditionClosest(query_data, stop_condition);
         size_t num_vectors = result.size();
         std::cout << "Found " << num_vectors << " vectors\n";
