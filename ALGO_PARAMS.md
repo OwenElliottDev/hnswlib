@@ -29,3 +29,21 @@ for M nearest neighbor search when ```ef``` =```ef_construction```: if the recal
 for improvement.
 * ```num_elements``` - defines the maximum number of elements in the index. The index can be extended by saving/loading (load_index
 function has a parameter which defines the new maximum number of elements).
+
+## Matryoshka (MRL) parameters (this fork):
+* ```mrl_scan_dim``` - constructor parameter; when > 0 the graph is built and traversed using only the first
+```mrl_scan_dim``` dimensions while full ```dim```-dimensional vectors are stored. Choose the smallest prefix at which
+your embedding model still ranks candidates well: too small caps recall regardless of ```rerank_size``` (candidate
+generation quality), larger values cost scan throughput. Sweep with ```bench/benchmark.py static --mrl-scan-dim```.
+* ```rerank_size``` - query parameter; the best ```rerank_size``` scan-phase candidates are re-scored with the
+full-dimension distance and the top ```k``` returned. The scan runs with ```ef = max(ef, rerank_size)```, so very large
+values are expensive; ```10-20x k``` is a good starting range.
+
+## Deletion strategy (this fork):
+* ```mark_deleted(label)``` - tombstone: cheap, reversible (```unmark_deleted```), but deleted elements remain in the
+graph, so query throughput degrades and memory is only reclaimed when slots are reused with
+```add_items(..., replace_deleted=True)```.
+* ```remove_item(label)``` - delete-and-reconnect: unlinks the element and repairs its neighborhood immediately
+(~tens of thousands of removals/s). Recall trajectory matches tombstones under churn while query throughput does not
+degrade as deletions accumulate; prefer it for delete-heavy or long-running indexes. Compare both with
+```bench/benchmark.py churn --delete-mode mark|remove```.
